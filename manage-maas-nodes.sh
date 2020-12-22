@@ -2,38 +2,15 @@
 
 # set -x
 
-# This is the connection to this host, where the VM is being stored
-qemu_connection="qemu+ssh://virsh@10.0.1.253/system"
-qemu_password="seBGtkWFKZuFUFgig8NYU5uh"
+. hypervisor.config
+. maas.config
 
-# This is the connection to the MAAS server
-maas_url="http://192.168.1.22:5240/MAAS/api/2.0/"
-maas_api_key="z9cT7jE3BhmxcXkWWN:ew5WW9QdDMg8TXVnjt:NtKgJdfgA5FVw2YT9CnaKU87wJ5fTxKa"
-
-# Storage area and type
-storage_path="/var/lib/libvirt/maas-images"
+# Storage type
 storage_format="raw"
-
-# Host prefix
-compute="as1-maas-node"
-
-# Number of control nodes, and theeir specifications
-control_count=1
-control_cpus=3
-control_ram=8192
-
-# Total number of VMs, and their specifications
-node_count=11
-node_start=1
-node_cpus=2
-node_ram=4096
 
 # Models for nic and storage
 nic_model="virtio"
 stg_bus="scsi"
-
-# The default network to use
-network="maas"
 
 # Sizes of disks for each of the VMs
 d1=50
@@ -149,7 +126,7 @@ wipe_disks() {
 		rm -rf "$storage_path/$maas_node/$maas_node-d2.img" &
 		rm -rf "$storage_path/$maas_node/$maas_node-d3.img" &
 	done
-	create_storge
+	create_storage
 	wait
 }
 
@@ -166,11 +143,13 @@ build_vms() {
 			node_type="control"
 		fi
 		bus=$stg_bus
-		macaddr1=$(printf '52:54:00:63:%02x:%02x\n' "$((RANDOM%256))" "$((RANDOM%256))")
-		macaddr2=$(printf '52:54:00:63:%02x:%02x\n' "$((RANDOM%256))" "$((RANDOM%256))")
-		macaddr3=$(printf '52:54:00:63:%02x:%02x\n' "$((RANDOM%256))" "$((RANDOM%256))")
-		macaddr4=$(printf '52:54:00:63:%02x:%02x\n' "$((RANDOM%256))" "$((RANDOM%256))")
-		macaddr5=$(printf '52:54:00:63:%02x:%02x\n' "$((RANDOM%256))" "$((RANDOM%256))")
+		macaddr=()
+		network_spec=""
+		for ((mac=0;mac<num_networks;mac++)); do
+			macaddr+=($(printf '52:54:00:63:%02x:%02x\n' "$((RANDOM%256))" "$((RANDOM%256))"))
+			network_spec+=" --network=bridge="${bridges[$mac]}",mac="${macaddr[$mac]}",model=$nic_model"
+		done
+
 
 		virt-install -v --noautoconsole   \
 			--print-xml               \
@@ -188,15 +167,11 @@ build_vms() {
 			--disk path="$storage_path/$virt_node/$virt_node-d1.img,format=$storage_format,size=$d1,bus=$bus,io=native,cache=directsync" \
 			--disk path="$storage_path/$virt_node/$virt_node-d2.img,format=$storage_format,size=$d2,bus=$bus,io=native,cache=directsync" \
 			--disk path="$storage_path/$virt_node/$virt_node-d3.img,format=$storage_format,size=$d3,bus=$bus,io=native,cache=directsync" \
-			--network=bridge="br-enp1s0",mac="$macaddr1",model=$nic_model \
-			--network=bridge="br-enp1s0.301",mac="$macaddr2",model=$nic_model \
-			--network=bridge="br-enp1s0.302",mac="$macaddr3",model=$nic_model \
-			--network=bridge="br-enp1s0.303",mac="$macaddr4",model=$nic_model \
-			--network=bridge="br-enp1s0.304",mac="$macaddr5",model=$nic_model > "$virt_node.xml" &&
+			$network_spec > "$virt_node.xml" &
 		virsh define "$virt_node.xml"
 		virsh start "$virt_node" &
 
-		maas_add_node ${virt_node} ${macaddr1} ${node_type} &
+		maas_add_node ${virt_node} ${macaddr[0]} ${node_type} &
 
 		# Wait some time before building the next, this helps with a lot of DHCP requests
 		# and ensures that all VMs are commissioned and deployed.
@@ -248,4 +223,3 @@ while getopts ":cwd" opt; do
 		;;
   esac
 done
-
