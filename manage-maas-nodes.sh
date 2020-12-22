@@ -12,11 +12,6 @@ storage_format="raw"
 nic_model="virtio"
 stg_bus="scsi"
 
-# Sizes of disks for each of the VMs
-disks+=(50)
-disks+=(20)
-disks+=(20)
-
 # how long you want to wait for commissioning
 # default is 1200, i.e. 20 mins
 commission_timeout=1200
