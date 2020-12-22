@@ -91,7 +91,12 @@ maas_add_node()
 		time_end=$(date +%s)
 	done
 
-	# Tags the machine (TODO: This doesn't work yet)
+	# If the tag doesn't exist, then create it
+	if [[ $(maas admin tag read ${node_type}) == "Not Found" ]] ; then
+	    maas admin tags create name=${node_type}
+	fi
+
+	# Assign the tag to the machine
 	maas admin machine update ${system_id} tags="${node_type}"
 
 	maas_auto_assign_networks ${system_id}
@@ -168,26 +173,26 @@ build_vms() {
 		macaddr5=$(printf '52:54:00:63:%02x:%02x\n' "$((RANDOM%256))" "$((RANDOM%256))")
 
 		virt-install -v --noautoconsole   \
-				--print-xml               \
-				--autostart               \
-				--boot network,hd,menu=on \
-				--video qxl,vram=256      \
-				--channel spicevmc        \
-				--name "$virt_node"       \
-				--ram "$ram"              \
-				--vcpus "$vcpus"          \
-				--console pty,target_type=serial \
-				--graphics spice,clipboard_copypaste=no,mouse_mode=client,filetransfer_enable=off \
-				--cpu host-passthrough,cache.mode=passthrough  \
-				--controller "$bus",model=virtio-scsi,index=0  \
-				--disk path="$storage_path/$virt_node/$virt_node-d1.img,format=$storage_format,size=$d1,bus=$bus,io=native,cache=directsync" \
-				--disk path="$storage_path/$virt_node/$virt_node-d2.img,format=$storage_format,size=$d2,bus=$bus,io=native,cache=directsync" \
-				--disk path="$storage_path/$virt_node/$virt_node-d3.img,format=$storage_format,size=$d3,bus=$bus,io=native,cache=directsync" \
-				--network=bridge="br-enp1s0",mac="$macaddr1",model=$nic_model \
-				--network=bridge="br-enp1s0.301",mac="$macaddr2",model=$nic_model \
-				--network=bridge="br-enp1s0.302",mac="$macaddr3",model=$nic_model \
-				--network=bridge="br-enp1s0.303",mac="$macaddr4",model=$nic_model \
-				--network=bridge="br-enp1s0.304",mac="$macaddr5",model=$nic_model > "$virt_node.xml" &&
+			--print-xml               \
+			--autostart               \
+			--boot network,hd,menu=on \
+			--video qxl,vram=256      \
+			--channel spicevmc        \
+			--name "$virt_node"       \
+			--ram "$ram"              \
+			--vcpus "$vcpus"          \
+			--console pty,target_type=serial \
+			--graphics spice,clipboard_copypaste=no,mouse_mode=client,filetransfer_enable=off \
+			--cpu host-passthrough,cache.mode=passthrough  \
+			--controller "$bus",model=virtio-scsi,index=0  \
+			--disk path="$storage_path/$virt_node/$virt_node-d1.img,format=$storage_format,size=$d1,bus=$bus,io=native,cache=directsync" \
+			--disk path="$storage_path/$virt_node/$virt_node-d2.img,format=$storage_format,size=$d2,bus=$bus,io=native,cache=directsync" \
+			--disk path="$storage_path/$virt_node/$virt_node-d3.img,format=$storage_format,size=$d3,bus=$bus,io=native,cache=directsync" \
+			--network=bridge="br-enp1s0",mac="$macaddr1",model=$nic_model \
+			--network=bridge="br-enp1s0.301",mac="$macaddr2",model=$nic_model \
+			--network=bridge="br-enp1s0.302",mac="$macaddr3",model=$nic_model \
+			--network=bridge="br-enp1s0.303",mac="$macaddr4",model=$nic_model \
+			--network=bridge="br-enp1s0.304",mac="$macaddr5",model=$nic_model > "$virt_node.xml" &&
 		virsh define "$virt_node.xml"
 		virsh start "$virt_node" &
 
