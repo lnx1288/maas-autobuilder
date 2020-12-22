@@ -155,7 +155,7 @@ build_vms() {
 		disk_spec=""
 		for ((disk=0;disk<${#disks[@]};disk++)); do
 			disk_spec+=" --disk path=$storage_path/$virt_node/$virt_node-d$((${disk} + 1)).img"
-			disk_spec+=",format=$storage_format,size=$disks[$disk],bus=$bus,io=native,cache=directsync"
+			disk_spec+=",format=$storage_format,size=${disks[$disk]},bus=$bus,io=native,cache=directsync"
 		done
 
 		virt-install -v --noautoconsole   \
