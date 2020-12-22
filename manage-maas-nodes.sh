@@ -154,14 +154,15 @@ build_vms() {
 		done
 
 		virt-install -v --noautoconsole   \
-			--print-xml               \
-			--autostart               \
-			--boot network,hd,menu=on \
-			--video qxl,vram=256      \
-			--channel spicevmc        \
-			--name "$virt_node"       \
-			--ram "$ram"              \
-			--vcpus "$vcpus"          \
+			--print-xml                \
+			--autostart                \
+			--boot network,hd,menu=on  \
+			--video qxl,vram=256       \
+			--channel spicevmc         \
+			--name "$virt_node"        \
+			--ram "$ram"               \
+			--vcpus "$vcpus"           \
+			--os-variant "ubuntu18.04" \
 			--console pty,target_type=serial \
 			--graphics spice,clipboard_copypaste=no,mouse_mode=client,filetransfer_enable=off \
 			--cpu host-passthrough,cache.mode=passthrough  \
