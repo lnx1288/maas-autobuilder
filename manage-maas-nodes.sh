@@ -30,7 +30,7 @@ maas_login()
 	sudo apt -y update && sudo apt -y install jq bc
 	sudo snap install maas --channel=2.8/stable
 
-	echo ${maas_api_key} | maas login admin ${maas_url} -
+	echo ${maas_api_key} | maas login ${maas_profile} ${maas_url} -
 }
 
 # Grabs the unique system)id for the host human readable hostname
@@ -38,7 +38,7 @@ maas_machine_id()
 {
 	node_name=$1
 
-	maas admin machines read hostname=${node_name} | jq ".[].system_id" | sed s/\"//g
+	maas ${maas_profile} machines read hostname=${node_name} | jq ".[].system_id" | sed s/\"//g
 }
 
 # Adds the VM into MAAS
@@ -48,7 +48,7 @@ maas_add_node()
 	mac_addr=$2
 	node_type=$3
 
-	maas admin machines create \
+	maas ${maas_profile} machines create \
 		hostname=${node_name} \
 		mac_addresses=${mac_addr} \
 		architecture=amd64/generic \
@@ -61,21 +61,21 @@ maas_add_node()
 
 	time_start=$(date +%s)
 	time_end=${time_start}
-	status_name=$(maas admin machine read ${system_id} | jq ".status_name" | sed s/\"//g)
+	status_name=$(maas ${maas_profile} machine read ${system_id} | jq ".status_name" | sed s/\"//g)
 	while [[ ${status_name} != "Ready" ]] && [[ $( echo ${time_end} - ${time_start} | bc ) -le ${commission_timeout} ]]
 	do
 		sleep 20
-		status_name=$(maas admin machine read ${system_id} | jq ".status_name" | sed s/\"//g)
+		status_name=$(maas ${maas_profile} machine read ${system_id} | jq ".status_name" | sed s/\"//g)
 		time_end=$(date +%s)
 	done
 
 	# If the tag doesn't exist, then create it
-	if [[ $(maas admin tag read ${node_type}) == "Not Found" ]] ; then
-	    maas admin tags create name=${node_type}
+	if [[ $(maas ${maas_profile} tag read ${node_type}) == "Not Found" ]] ; then
+	    maas ${maas_profile} tags create name=${node_type}
 	fi
 
 	# Assign the tag to the machine
-	maas admin tag update-nodes ${node_type} add=${system_id}
+	maas ${maas_profile} tag update-nodes ${node_type} add=${system_id}
 
 	maas_auto_assign_networks ${system_id}
 }
@@ -84,14 +84,14 @@ maas_add_node()
 maas_auto_assign_networks()
 {
 	system_id=$1
-	node_interfaces=$(maas admin interfaces read ${system_id} | jq ".[] | {id:.id, name:.name, mode:.links[].mode, subnet:.links[].subnet.id }" --compact-output)
+	node_interfaces=$(maas ${maas_profile} interfaces read ${system_id} | jq ".[] | {id:.id, name:.name, mode:.links[].mode, subnet:.links[].subnet.id }" --compact-output)
 	for interface in ${node_interfaces}
 	do
 		int_id=$(echo $interface | jq ".id" | sed s/\"//g)
 		subnet_id=$(echo $interface | jq ".subnet" | sed s/\"//g)
 		mode=$(echo $interface | jq ".mode" | sed s/\"//g)
 		if [[ $mode != "auto" ]] ; then
-			maas admin interface link-subnet ${system_id} ${int_id} mode="AUTO" subnet=${subnet_id}
+			maas ${maas_profile} interface link-subnet ${system_id} ${int_id} mode="AUTO" subnet=${subnet_id}
 		fi
 	done
 }
@@ -204,7 +204,7 @@ destroy_vms() {
 			"/etc/libvirt/storage/autostart/$compute_node.xml"
 
 			machine_id=$(maas_machine_id ${compute_node})
-			maas admin machine delete ${machine_id}
+			maas ${maas_profile} machine delete ${machine_id}
 	done
 }
 
