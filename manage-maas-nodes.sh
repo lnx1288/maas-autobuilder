@@ -2,8 +2,8 @@
 
 # set -x
 
-. hypervisor.config
 . maas.config
+. hypervisor.config
 
 # Storage type
 storage_format="raw"
@@ -13,9 +13,9 @@ nic_model="virtio"
 stg_bus="scsi"
 
 # Sizes of disks for each of the VMs
-d1=50
-d2=20
-d3=20
+disks+=(50)
+disks+=(20)
+disks+=(20)
 
 # how long you want to wait for commissioning
 # default is 1200, i.e. 20 mins
@@ -30,7 +30,7 @@ maas_login()
 	sudo apt -y update && sudo apt -y install jq bc
 	sudo snap install maas --channel=2.8/stable
 
-	echo ${maas_api_key} | maas login ${maas_profile} ${maas_url} -
+	echo ${maas_api_key} | maas login ${maas_profile} ${maas_endpoint} -
 }
 
 # Grabs the unique system)id for the host human readable hostname
@@ -112,9 +112,9 @@ create_storage() {
 	for ((machine="$node_start"; machine<=node_count; machine++)); do
 		printf -v maas_node %s-%02d "$compute" "$machine"
 		mkdir -p "$storage_path/$maas_node"
-		/usr/bin/qemu-img create -f "$storage_format" "$storage_path/$maas_node/$maas_node-d1.img" "$d1"G &
-		/usr/bin/qemu-img create -f "$storage_format" "$storage_path/$maas_node/$maas_node-d2.img" "$d2"G &
-		/usr/bin/qemu-img create -f "$storage_format" "$storage_path/$maas_node/$maas_node-d3.img" "$d3"G &
+		for ((disk=0;disk<${#disks[@]};disk++)); do
+		    /usr/bin/qemu-img create -f "$storage_format" "$storage_path/$maas_node/$maas_node-d$((${disk} + 1)).img" "${disks[$disk]}"G &
+		done
 	done
 	wait
 }
@@ -123,9 +123,9 @@ wipe_disks() {
 	for ((machine="$node_start"; machine<=node_count; machine++)); do
 		printf -v maas_node %s-%02d "$compute" "$machine"
 		virsh --connect qemu:///system shutdown "$maas_node"
-		rm -rf "$storage_path/$maas_node/$maas_node-d1.img" &
-		rm -rf "$storage_path/$maas_node/$maas_node-d2.img" &
-		rm -rf "$storage_path/$maas_node/$maas_node-d3.img" &
+		for ((disk=0;disk<${#disks[@]};disk++)); do
+			rm -rf "$storage_path/$maas_node/$maas_node-d$((${disk} + 1)).img" &
+		done
 	done
 	create_storage
 	wait
@@ -144,13 +144,19 @@ build_vms() {
 			node_type="control"
 		fi
 		bus=$stg_bus
+
 		macaddr=()
 		network_spec=""
-		for ((mac=0;mac<num_networks;mac++)); do
+		for ((mac=0;mac<${#bridges[@]};mac++)); do
 			macaddr+=($(printf '52:54:00:63:%02x:%02x\n' "$((RANDOM%256))" "$((RANDOM%256))"))
 			network_spec+=" --network=bridge="${bridges[$mac]}",mac="${macaddr[$mac]}",model=$nic_model"
 		done
 
+		disk_spec=""
+		for ((disk=0;disk<${#disks[@]};disk++)); do
+			disk_spec+=" --disk path=$storage_path/$virt_node/$virt_node-d$((${disk} + 1)).img"
+			disk_spec+=",format=$storage_format,size=$disks[$disk],bus=$bus,io=native,cache=directsync"
+		done
 
 		virt-install -v --noautoconsole   \
 			--print-xml               \
@@ -165,9 +171,7 @@ build_vms() {
 			--graphics spice,clipboard_copypaste=no,mouse_mode=client,filetransfer_enable=off \
 			--cpu host-passthrough,cache.mode=passthrough  \
 			--controller "$bus",model=virtio-scsi,index=0  \
-			--disk path="$storage_path/$virt_node/$virt_node-d1.img,format=$storage_format,size=$d1,bus=$bus,io=native,cache=directsync" \
-			--disk path="$storage_path/$virt_node/$virt_node-d2.img,format=$storage_format,size=$d2,bus=$bus,io=native,cache=directsync" \
-			--disk path="$storage_path/$virt_node/$virt_node-d3.img,format=$storage_format,size=$d3,bus=$bus,io=native,cache=directsync" \
+			$disk_spec \
 			$network_spec > "$virt_node.xml" &&
 		virsh define "$virt_node.xml"
 		virsh start "$virt_node" &
@@ -193,8 +197,8 @@ destroy_vms() {
 	        virsh --connect qemu:///system undefine "$compute_node"
 
 	        # Remove the three storage volumes from disk
-	        for disk in {1..3}; do
-	                virsh vol-delete --pool "$compute_node" "$compute_node-d${disk}.img"
+	        for ((disk=0;disk<${#disks[@]};disk++)); do
+	                virsh vol-delete --pool "$compute_node" "$compute_node-d$((${disk} + 1)).img"
 	        done
 	        rm -rf "$storage_path/$compute_node/"
 	        sync
