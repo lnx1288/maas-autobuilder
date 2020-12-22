@@ -27,7 +27,8 @@ build_timeout=60
 # This logs in to maas, and sets up the admin profile
 maas_login()
 {
-	sudo apt -u update && sudo apt -y install maas-cli jq bc
+	sudo apt -y update && sudo apt -y install jq bc
+	sudo snap install maas --channel=2.8/stable
 
 	echo ${maas_api_key} | maas login admin ${maas_url} -
 }
@@ -74,7 +75,7 @@ maas_add_node()
 	fi
 
 	# Assign the tag to the machine
-	maas admin machine update ${system_id} tags="${node_type}"
+	maas admin tag update-nodes ${node_type} add=${system_id}
 
 	maas_auto_assign_networks ${system_id}
 }
@@ -167,7 +168,7 @@ build_vms() {
 			--disk path="$storage_path/$virt_node/$virt_node-d1.img,format=$storage_format,size=$d1,bus=$bus,io=native,cache=directsync" \
 			--disk path="$storage_path/$virt_node/$virt_node-d2.img,format=$storage_format,size=$d2,bus=$bus,io=native,cache=directsync" \
 			--disk path="$storage_path/$virt_node/$virt_node-d3.img,format=$storage_format,size=$d3,bus=$bus,io=native,cache=directsync" \
-			$network_spec > "$virt_node.xml" &
+			$network_spec > "$virt_node.xml" &&
 		virsh define "$virt_node.xml"
 		virsh start "$virt_node" &
 
