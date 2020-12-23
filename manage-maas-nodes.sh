@@ -17,7 +17,7 @@ stg_bus="scsi"
 commission_timeout=1200
 
 # Time between building VMs
-build_timeout=60
+build_fanout=60
 
 # This logs in to maas, and sets up the admin profile
 maas_login()
@@ -29,7 +29,7 @@ maas_login()
 }
 
 # Grabs the unique system)id for the host human readable hostname
-maas_machine_id()
+maas_system_id()
 {
 	node_name=$1
 
@@ -52,17 +52,9 @@ maas_add_node()
 		power_parameters_power_address=${qemu_connection} \
 		power_parameters_power_pass=${qemu_password}
 
-	system_id=$(maas_machine_id ${node_name})
+	system_id=$(maas_system_id ${node_name})
 
-	time_start=$(date +%s)
-	time_end=${time_start}
-	status_name=$(maas ${maas_profile} machine read ${system_id} | jq ".status_name" | sed s/\"//g)
-	while [[ ${status_name} != "Ready" ]] && [[ $( echo ${time_end} - ${time_start} | bc ) -le ${commission_timeout} ]]
-	do
-		sleep 20
-		status_name=$(maas ${maas_profile} machine read ${system_id} | jq ".status_name" | sed s/\"//g)
-		time_end=$(date +%s)
-	done
+	ensure_machine_ready ${system_id}
 
 	# If the tag doesn't exist, then create it
 	if [[ $(maas ${maas_profile} tag read ${node_type}) == "Not Found" ]] ; then
@@ -97,6 +89,20 @@ create_vms() {
 	build_vms
 }
 
+ensure_machine_ready()
+{
+	system_id=$1
+
+	time_start=$(date +%s)
+	time_end=${time_start}
+	status_name=$(maas ${maas_profile} machine read ${system_id} | jq ".status_name" | sed s/\"//g)
+	while [[ ${status_name} != "Ready" ]] && [[ $( echo ${time_end} - ${time_start} | bc ) -le ${commission_timeout} ]]
+	do
+		sleep 20
+		status_name=$(maas ${maas_profile} machine read ${system_id} | jq ".status_name" | sed s/\"//g)
+		time_end=$(date +%s)
+	done
+}
 
 wipe_vms() {
 	maas_login
@@ -104,22 +110,28 @@ wipe_vms() {
 }
 
 create_storage() {
-	for ((machine="$node_start"; machine<=node_count; machine++)); do
-		printf -v maas_node %s-%02d "$compute" "$machine"
-		mkdir -p "$storage_path/$maas_node"
+	for ((virt="$node_start"; virt<=node_count; virt++)); do
+		printf -v virt_node %s-%02d "$compute" "$virt"
+		mkdir -p "$storage_path/$virt_node"
 		for ((disk=0;disk<${#disks[@]};disk++)); do
-		    /usr/bin/qemu-img create -f "$storage_format" "$storage_path/$maas_node/$maas_node-d$((${disk} + 1)).img" "${disks[$disk]}"G &
+		    /usr/bin/qemu-img create -f "$storage_format" "$storage_path/$virt_node/$virt_node-d$((${disk} + 1)).img" "${disks[$disk]}"G &
 		done
 	done
 	wait
 }
 
 wipe_disks() {
-	for ((machine="$node_start"; machine<=node_count; machine++)); do
-		printf -v maas_node %s-%02d "$compute" "$machine"
-		virsh --connect qemu:///system shutdown "$maas_node"
+	for ((virt="$node_start"; virt<=node_count; virt++)); do
+		printf -v virt_node %s-%02d "$compute" "$virt"
+		system_id=$(maas_system_id ${virt_node})
+		maas ${maas_profile} machine release ${system_id}
+
+		ensure_machine_ready ${system_id}
+
+		virsh --connect qemu:///system shutdown "$virt_node"
+
 		for ((disk=0;disk<${#disks[@]};disk++)); do
-			rm -rf "$storage_path/$maas_node/$maas_node-d$((${disk} + 1)).img" &
+			rm -rf "$storage_path/$virt_node/$virt_node-d$((${disk} + 1)).img" &
 		done
 	done
 	create_storage
@@ -176,7 +188,7 @@ build_vms() {
 
 		# Wait some time before building the next, this helps with a lot of DHCP requests
 		# and ensures that all VMs are commissioned and deployed.
-		sleep ${build_timeout}
+		sleep ${build_fanout}
 
 	done
 	wait
@@ -184,27 +196,27 @@ build_vms() {
 
 destroy_vms() {
 	for ((node="$node_start"; node<=node_count; node++)); do
-		printf -v compute_node %s-%02d "$compute" "$node"
+		printf -v virt_node %s-%02d "$compute" "$node"
 
 	        # If the domain is running, this will complete, else throw a warning 
-	        virsh --connect qemu:///system destroy "$compute_node"
+	        virsh --connect qemu:///system destroy "$virt_node"
 
 	        # Actually remove the VM
-	        virsh --connect qemu:///system undefine "$compute_node"
+	        virsh --connect qemu:///system undefine "$virt_node"
 
 	        # Remove the three storage volumes from disk
 	        for ((disk=0;disk<${#disks[@]};disk++)); do
-	                virsh vol-delete --pool "$compute_node" "$compute_node-d$((${disk} + 1)).img"
+	                virsh vol-delete --pool "$virt_node" "$virt_node-d$((${disk} + 1)).img"
 	        done
-	        rm -rf "$storage_path/$compute_node/"
+	        rm -rf "$storage_path/$virt_node/"
 	        sync
-	        rm -f "$compute_node.xml" \
-			"/etc/libvirt/qemu/$compute_node.xml"    \
-			"/etc/libvirt/storage/$compute_node.xml" \
-			"/etc/libvirt/storage/autostart/$compute_node.xml"
+	        rm -f "$virt_node.xml" \
+			"/etc/libvirt/qemu/$virt_node.xml"    \
+			"/etc/libvirt/storage/$virt_node.xml" \
+			"/etc/libvirt/storage/autostart/$virt_node.xml"
 
-			machine_id=$(maas_machine_id ${compute_node})
-			maas ${maas_profile} machine delete ${machine_id}
+			system_id=$(maas_system_id ${virt_node})
+			maas ${maas_profile} machine delete ${system_id}
 	done
 }
 
