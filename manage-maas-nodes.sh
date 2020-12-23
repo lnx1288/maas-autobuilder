@@ -155,7 +155,7 @@ build_vms() {
 		macaddr=()
 		network_spec=""
 		for ((mac=0;mac<${#bridges[@]};mac++)); do
-			macaddr+=($(printf '52:54:00:63:%02x:%02x\n' "$((RANDOM%256))" "$((RANDOM%256))"))
+			macaddr+=($(printf '52:54:00:%02x:%02x:%02x\n' "$((RANDOM%256))" "$((RANDOM%256))" "$((RANDOM%256))"))
 			network_spec+=" --network=bridge="${bridges[$mac]}",mac="${macaddr[$mac]}",model=$nic_model"
 		done
 
@@ -198,23 +198,28 @@ destroy_vms() {
 	for ((node="$node_start"; node<=node_count; node++)); do
 		printf -v virt_node %s-%02d "$compute" "$node"
 
-	        # If the domain is running, this will complete, else throw a warning 
-	        virsh --connect qemu:///system destroy "$virt_node"
+			# If the domain is running, this will complete, else throw a warning
+			virsh --connect qemu:///system destroy "$virt_node"
 
-	        # Actually remove the VM
-	        virsh --connect qemu:///system undefine "$virt_node"
+			# Actually remove the VM
+			virsh --connect qemu:///system undefine "$virt_node"
 
-	        # Remove the three storage volumes from disk
-	        for ((disk=0;disk<${#disks[@]};disk++)); do
-	                virsh vol-delete --pool "$virt_node" "$virt_node-d$((${disk} + 1)).img"
-	        done
-	        rm -rf "$storage_path/$virt_node/"
-	        sync
+			# Remove the three storage volumes from disk
+			for ((disk=0;disk<${#disks[@]};disk++)); do
+				virsh vol-delete --pool "$virt_node" "$virt_node-d$((${disk} + 1)).img"
+			done
+
+			# Remove the folder storage is located
+			rm -rf "$storage_path/$virt_node/"
+			sync
+
+			# Remove the XML definitions for the VM
 	        rm -f "$virt_node.xml" \
-			"/etc/libvirt/qemu/$virt_node.xml"    \
-			"/etc/libvirt/storage/$virt_node.xml" \
-			"/etc/libvirt/storage/autostart/$virt_node.xml"
+				"/etc/libvirt/qemu/$virt_node.xml"    \
+				"/etc/libvirt/storage/$virt_node.xml" \
+				"/etc/libvirt/storage/autostart/$virt_node.xml"
 
+			# Now remove the VM from MAAS
 			system_id=$(maas_system_id ${virt_node})
 			maas ${maas_profile} machine delete ${system_id}
 	done
