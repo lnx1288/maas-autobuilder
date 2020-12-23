@@ -292,6 +292,15 @@ destroy_vms() {
     done
 }
 
+show_help() {
+  echo "
+
+  -c    Creates everything
+  -w    Removes everything
+  -d    Releases VMs, Clears Disk
+  "
+}
+
 while getopts ":cwd" opt; do
   case $opt in
     c)
@@ -304,7 +313,9 @@ while getopts ":cwd" opt; do
         wipe_disks
         ;;
     \?)
-        echo "Invalid option: -$OPTARG" >&2
+        printf "Unrecognized option: -%s. Valid options are:" "$OPTARG" >&2
+        show_help
+        exit 1
         ;;
   esac
 done
