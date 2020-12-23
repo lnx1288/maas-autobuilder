@@ -206,10 +206,10 @@ build_vms() {
         # such that this can be either bridge or network type
         if [[ $network_type == "bridge" ]] ; then
             net_prefix="bridge"
-            net_type=bridges
+            net_type=(${bridge[@]})
         elif [[ $network_type == "network" ]] ; then
             net_prefix="network"
-            net_type=networks
+            net_type=(${networks[@]})
         fi
 
         # Now define the network definition
