@@ -201,9 +201,21 @@ build_vms() {
         # virt-install
         macaddr=()
         network_spec=""
-        for ((mac=0;mac<${#bridges[@]};mac++)); do
+
+        # Based on the type of network we are using we will assign variables
+        # such that this can be either bridge or network type
+        if [[ $network_type == "bridge" ]] ; then
+            net_prefix="bridge"
+            net_type=bridges
+        elif [[ $network_type == "network" ]] ; then
+            net_prefix="network"
+            net_type=networks
+        fi
+
+        # Now define the network definition
+        for ((mac=0;mac<${#net_type[@]};mac++)); do
             macaddr+=($(printf '52:54:00:%02x:%02x:%02x\n' "$((RANDOM%256))" "$((RANDOM%256))" "$((RANDOM%256))"))
-            network_spec+=" --network=bridge="${bridges[$mac]}",mac="${macaddr[$mac]}",model=$nic_model"
+            network_spec+=" --network=$net_prefix="${net_type[$mac]}",mac="${macaddr[$mac]}",model=$nic_model"
         done
 
         # Based on the disks array, it will create a definition to add these
