@@ -39,6 +39,8 @@ init_variables() {
     core_packages=( jq moreutils uuid )
     maas_packages=( maas maas-cli maas-proxy maas-dhcp maas-dns maas-rack-controller maas-region-api maas-common )
     pg_packages=( postgresql-10 postgresql-client postgresql-client-common postgresql-common )
+
+    maas_snaps=( maas maas-test-db )
 }
 
 remove_maas() {
@@ -56,10 +58,19 @@ remove_maas() {
     done
 }
 
+remove_maas_snap() {
+    sudo snap remove ${maas_snaps[@]}
+}
+
 install_maas() {
     # This is separate from the removal, so we can handle them atomically
     sudo apt-get -fuy --reinstall install "${core_packages}" "${maas_packages[@]}" "${pg_packages[@]}"
     sudo sed -i 's/DISPLAY_LIMIT=5/DISPLAY_LIMIT=100/' /usr/share/maas/web/static/js/bundle/maas-min.js
+}
+
+install_maas_snap() {
+    sudo apt-get -fuy --reinstall install "${core_packages}"
+    sudo snap install ${maas_snaps[@]}
 }
 
 purge_admin_user() {
@@ -72,7 +83,10 @@ with deleted_user as (delete from auth_user where username = '$maas_profile' ret
      delete from piston3_consumer where user_id = (select id from deleted_user);
 EOF
 
-    sudo -u postgres psql -c "$purgeadmin" maasdb
+    psql_cmd="psql"
+    [[ $maas_pkg_type == "snap" ]] && psql_cmd="maas-test-db.psql"
+
+    sudo -u postgres $psql_cmd -c "$purgeadmin" maasdb
 }
 
 build_maas() {
@@ -85,7 +99,9 @@ build_maas() {
 
     if [ -f ~/.maas-api.key ]; then
         rm ~/.maas-api.key
-        maas_api_key="$(sudo maas-region apikey --username=$maas_profile | tee ~/.maas-api.key)"
+
+        [[ $maas_pkg_type == "deb" ]] && maas_api_key="$(sudo maas-region apikey --username=$maas_profile | tee ~/.maas-api.key)"
+        [[ $maas_pkg_type == "snap" ]] && maas_api_key="$(sudo maas apikey --username $maas_profile | head -n 1 | tee ~/.maas-api.key)"
     fi;
 
     # Fetch the MAAS API key, store to a file for later reuse, also set this var to that value
@@ -125,19 +141,21 @@ build_maas() {
     sleep 3
     maas $maas_profile vlan update fabric-1 0 dhcp_on=True primary_rack="$maas_system_id"
 
-    # This is needed, because it points to localhost by default and will fail to 
-    # commission/deploy in this state
-    echo "DEBUG: http://$maas_bridge_ip:5240/MAAS/"
+    if [[ $maas_pkg_type == "deb" ]]; then
+        # This is needed, because it points to localhost by default and will fail to
+        # commission/deploy in this state
+        echo "DEBUG: http://$maas_bridge_ip:5240/MAAS/"
 
-    sudo debconf-set-selections maas.debconf
-    sleep 2
-    # sudo maas-rack config --region-url "http://$maas_bridge_ip:5240/MAAS/" && sudo service maas-rackd restart
-    sudo DEBIAN_FRONTEND=noninteractive dpkg-reconfigure maas-rack-controller
-    sleep 2
+        sudo debconf-set-selections maas.debconf
+        sleep 2
+        # sudo maas-rack config --region-url "http://$maas_bridge_ip:5240/MAAS/" && sudo service maas-rackd restart
+        sudo DEBIAN_FRONTEND=noninteractive dpkg-reconfigure maas-rack-controller
+        sleep 2
 
-    sudo DEBIAN_FRONTEND=noninteractive dpkg-reconfigure maas-region-controller
-    sudo service maas-rackd restart
-    sleep 5
+        sudo DEBIAN_FRONTEND=noninteractive dpkg-reconfigure maas-region-controller
+        sudo service maas-rackd restart
+        sleep 5
+    fi
 }
 
 bootstrap_maas() {
@@ -171,12 +189,12 @@ bootstrap_maas() {
 # These are for juju, adding a cloud matching the customer/reproducer we need
 add_cloud() {
 
-	if ! [ -x "$(command -v juju)" ]; then
-		sudo snap install juju --channel "$juju_version"
-	fi
-	rand_uuid=$(uuid -F siv)
-	cloud_name="$1"
-	maas_api_key=$(<~/.maas-api.key)
+    if ! [ -x "$(command -v juju)" ]; then
+        sudo snap install juju --channel "$juju_version"
+    fi
+    rand_uuid=$(uuid -F siv)
+    cloud_name="$1"
+    maas_api_key=$(<~/.maas-api.key)
 
 cat > clouds-"$rand_uuid".yaml <<EOF
 clouds:
@@ -234,7 +252,7 @@ EOF
 
     # Since we created ephemeral files, let's wipe them out. Comment if you want to keep them around
     if [[ $? = 0 ]]; then
-	rm -f clouds-"$rand_uuid".yaml credentials-"$rand_uuid".yaml config-"$rand_uuid".yaml
+    rm -f clouds-"$rand_uuid".yaml credentials-"$rand_uuid".yaml config-"$rand_uuid".yaml
     fi
 
     juju enable-ha
@@ -281,54 +299,54 @@ no_proxy="localhost,127.0.0.1,$maas_system_ip,$(echo $maas_ip_range.{100..200} |
 while getopts ":a:bc:ij:nt:r" opt; do
   case $opt in
     a )
-    check_bins
-    remove_maas
-    install_maas
-    build_maas
-    bootstrap_maas
-    add_cloud "$OPTARG"
-    ;;
+        check_bins
+        remove_maas
+        install_maas
+        build_maas
+        bootstrap_maas
+        add_cloud "$OPTARG"
+        ;;
     b )
-    echo "Building out a new MAAS server"
-    check_bins
-    install_maas
-    build_maas
-    bootstrap_maas
-    exit 0
-    ;;
+        echo "Building out a new MAAS server"
+        check_bins
+        install_maas
+        build_maas
+        bootstrap_maas
+        exit 0
+        ;;
     c )
-    check_bins maas
-    init_variables
-    add_cloud "$OPTARG"
-    ;;
+        check_bins maas
+        init_variables
+        add_cloud "$OPTARG"
+        ;;
     i )
-    echo "Installing MAAS and PostgreSQL dependencies"
-    install_maas
-    exit 0
-    ;;
+        echo "Installing MAAS and PostgreSQL dependencies"
+        install_maas
+        exit 0
+        ;;
     j )
-    echo "Bootstrapping Juju controller $OPTARG"
-    add_cloud "$OPTARG"
-    exit 0
-    ;;
+        echo "Bootstrapping Juju controller $OPTARG"
+        add_cloud "$OPTARG"
+        exit 0
+        ;;
     r )
-    remove_maas
-    exit 0
-    ;;
+        remove_maas
+        exit 0
+        ;;
     t )
-    destroy_cloud "$OPTARG"
-    exit 0
-    ;;
-   \? )
-    printf "Unrecognized option: -%s. Valid options are:" "$OPTARG" >&2
-    show_help
-    exit 1
-    ;;
+        destroy_cloud "$OPTARG"
+        exit 0
+        ;;
+    \? )
+        printf "Unrecognized option: -%s. Valid options are:" "$OPTARG" >&2
+        show_help
+        exit 1
+        ;;
     : )
-    printf "Option -%s needs an argument.\n" "$OPTARG" >&2
-    show_help
-    echo ""
-    exit 1
+        printf "Option -%s needs an argument.\n" "$OPTARG" >&2
+        show_help
+        echo ""
+        exit 1
     ;;
   esac
 done
