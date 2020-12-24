@@ -25,7 +25,7 @@ build_fanout=60
 maas_login()
 {
     # Install some of the dependent packages
-    sudo apt -y update && sudo apt -y install jq bc
+    sudo apt -y update && sudo apt -y install jq bc virtinst
 
     # We install the snap, as maas-cli is not in distributions, this ensures
     # that the package we invoke would be consistent
