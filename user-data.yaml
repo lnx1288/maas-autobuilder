@@ -11,7 +11,6 @@ users:
   - default
   - name: virsh
     primary_group: virsh
-    groups: [ libvirt, libvirt-qemu ]
     passwd: $6$SVOxUrhz9mNyscUJ$hKF0RMY1nkGC3BpiozpaznE3AWerd8Ac8AlV9YEpLx50bLw5zweFCuTEEdS04McJNlaIqA.E4HiPuaIYGMzlH/
     lock_passwd: false
 
@@ -23,6 +22,7 @@ packages:
   - qemu-kvm
   - libvirt-bin
   - qemu-efi
+  - ksmtuned
 
 ## Write arbitrary files to the file-system (including binaries!)
 write_files:
@@ -46,6 +46,8 @@ write_files:
 # Runs any command that we need to run post install
 runcmd:
   - [ "efibootmgr", "-n", "0001"]
-  - [ "groupmod", "-g", "117", "libvirt" ]
-  - [ "groupmod", "-g", "64055", "libvirt-qemu" ]
+  - [ "usermod", "-a", "-G", "libvirt", "virsh" ]
+  - [ "usermod", "-a", "-G", "libvirt-qemu", "virsh" ]
+  - [ "systemctl", "enable", "ksmtuned"]
+  - [ "systemctl", "restart", "ksmtuned"]
   - [ "/root/initial_setup.sh" ]
