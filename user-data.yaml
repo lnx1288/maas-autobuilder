@@ -1,0 +1,47 @@
+#cloud-config
+
+ssh_import_id:
+- lp:arif-ali
+
+## Update apt database and upgrade packages on first boot
+package_update: true
+package_upgrade: true
+
+users:
+  - default
+  - name: virsh
+    primary_group: virsh
+    groups: [ libvirt, libvirt-qemu ]
+    passwd: $6$SVOxUrhz9mNyscUJ$hKF0RMY1nkGC3BpiozpaznE3AWerd8Ac8AlV9YEpLx50bLw5zweFCuTEEdS04McJNlaIqA.E4HiPuaIYGMzlH/
+
+## Install additional packages on first boot
+packages:
+  - virtinst
+  - bc
+  - jq
+  - qemu-kvm
+  - libvirt-bin
+  - qemu-efi
+
+## Write arbitrary files to the file-system (including binaries!)
+write_files:
+- path: /root/initial_setup.sh
+  content: |
+    #!/bin/bash
+
+    sed "s/^\(PasswordAuthentication\).*/\1 yes/g" /etc/ssh/sshd_config
+    systemctl restart sshd
+
+    git clone https://github.com/arif-ali/maas-autobuilder.git /root/maas-autobuilder
+    cd /root/maas-autobuilder
+    ln -sf ${HOSTNAME}.config hypervisor.config
+
+    chmod +x manage-maas-nodes.sh
+    ./manage-maas-nodes.sh -c
+  permissions: '0755'
+  owner: root:root
+
+# Runs any command that we need to run post install
+runcmd:
+- [ "/root/initial_setup.sh" ]
+- [ "efibootmgr", "-n", "0001"]
