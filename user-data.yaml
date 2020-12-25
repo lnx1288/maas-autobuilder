@@ -13,6 +13,7 @@ users:
     primary_group: virsh
     groups: [ libvirt, libvirt-qemu ]
     passwd: $6$SVOxUrhz9mNyscUJ$hKF0RMY1nkGC3BpiozpaznE3AWerd8Ac8AlV9YEpLx50bLw5zweFCuTEEdS04McJNlaIqA.E4HiPuaIYGMzlH/
+    lock_passwd: false
 
 ## Install additional packages on first boot
 packages:
@@ -29,7 +30,7 @@ write_files:
   content: |
     #!/bin/bash
 
-    sed "s/^\(PasswordAuthentication\).*/\1 yes/g" /etc/ssh/sshd_config
+    sed -i "s/^\(PasswordAuthentication\).*/\1 yes/g" /etc/ssh/sshd_config
     systemctl restart sshd
 
     git clone https://github.com/arif-ali/maas-autobuilder.git /root/maas-autobuilder
