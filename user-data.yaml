@@ -30,6 +30,7 @@ write_files:
   content: |
     #!/bin/bash
 
+    # Enable SSH, so that virsh can login
     sed -i "s/^\(PasswordAuthentication\).*/\1 yes/g" /etc/ssh/sshd_config
     systemctl restart sshd
 
@@ -44,5 +45,7 @@ write_files:
 
 # Runs any command that we need to run post install
 runcmd:
-- [ "/root/initial_setup.sh" ]
-- [ "efibootmgr", "-n", "0001"]
+  - [ "efibootmgr", "-n", "0001"]
+  - [ "groupmod", "-g", "117", "libvirt" ]
+  - [ "groupmod", "-g", "64055", "libvirt-qemu" ]
+  - [ "/root/initial_setup.sh" ]
