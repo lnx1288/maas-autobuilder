@@ -89,6 +89,46 @@ ensure_machine_in_state()
     done
 }
 
+# Adds the VM into MAAS
+maas_add_node()
+{
+    node_name=$1
+    mac_addr=$2
+    node_type=$3
+
+    machine_type="vm"
+    [[ $node_type == "physical"]] && machine_type="$node_type"
+
+    if [[ $machine_type == "vm" ]] ; then
+        power_type=-"virsh"
+        power_params="power_parameters_power_id=${node_name}"
+        power_params+=" power_parameters_power_address=${qemu_connection}"
+        power_params+=" power_parameters_power_pass=${qemu_password}"
+    else
+        power_type="manual"
+        power_params=""
+    fi
+
+    # This command creates the machine in MAAS. This will then automatically
+    # turn the machines on, and start commissioning.
+    maas ${maas_profile} machines create \
+        hostname=${node_name}            \
+        mac_addresses=${mac_addr}        \
+        architecture=amd64/generic       \
+        power_type=${power_type} ${power_params}
+
+    # Grabs the system_id for th node that we are adding
+    system_id=$(maas_system_id ${node_name})
+
+    ensure_machine_in_state ${system_id} "Ready"
+
+    machine_add_tag ${system_id} ${node_type}
+
+    # Ensure that all the networks on the system have the Auto-Assign set
+    # so that the all the of the networks on the host have an IP automatically.
+    maas_assign_networks ${system_id}
+}
+
 read_config()
 {
     configs=""
