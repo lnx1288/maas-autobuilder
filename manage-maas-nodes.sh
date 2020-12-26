@@ -1,10 +1,7 @@
 #!/bin/bash
 
 # set -x
-
-. default.config
-. maas.config
-. hypervisor.config
+. functions.sh
 
 # Storage type
 storage_format="raw"
@@ -13,35 +10,8 @@ storage_format="raw"
 nic_model="virtio"
 stg_bus="scsi"
 
-# how long you want to wait for commissioning
-# default is 1200, i.e. 20 mins
-commission_timeout=1200
-
 # Time between building VMs
 build_fanout=60
-
-# Ensures that any dependent packages are installed for any MAAS CLI commands
-# This also logs in to MAAS, and sets up the admin profile
-maas_login()
-{
-    # Install some of the dependent packages
-    sudo apt -y update && sudo apt -y install jq bc virtinst
-
-    # We install the snap, as maas-cli is not in distributions, this ensures
-    # that the package we invoke would be consistent
-    sudo snap install maas --channel=2.8/stable
-
-    # Login to MAAS using the API key and the endpoint
-    echo ${maas_api_key} | maas login ${maas_profile} ${maas_endpoint} -
-}
-
-# Grabs the unique system_id for the host human readable hostname
-maas_system_id()
-{
-    node_name=$1
-
-    maas ${maas_profile} machines read hostname=${node_name} | jq ".[].system_id" | sed s/\"//g
-}
 
 # Adds the VM into MAAS
 maas_add_node()
@@ -64,17 +34,10 @@ maas_add_node()
     # Grabs the system_id for th node that we are adding
     system_id=$(maas_system_id ${node_name})
 
-    # This will ensure that the node is ready before we start manipulating
-    # other attributes.
-    ensure_machine_ready ${system_id}
 
-    # If the tag doesn't exist, then create it
-    if [[ $(maas ${maas_profile} tag read ${node_type}) == "Not Found" ]] ; then
-        maas ${maas_profile} tags create name=${node_type}
-    fi
+    ensure_machine_in_state ${system_id} "Ready"
 
-    # Assign the tag to the machine
-    maas ${maas_profile} tag update-nodes ${node_type} add=${system_id}
+    machine_add_tag ${system_id} ${node_type}
 
     # Ensure that all the networks on the system have the Auto-Assign set
     # so that the all the of the networks on the host have an IP automatically.
@@ -105,31 +68,15 @@ maas_auto_assign_networks()
 
 # Calls the 3 functions that creates the VMs
 create_vms() {
+    install_deps
     maas_login
     create_storage
     build_vms
 }
 
-# This takes the system_id, and ensures that the machine is uin Ready state
-# You may want to tweak the commission_timeout above in somehow it's failing
-# and needs to be done quicker
-ensure_machine_ready()
-{
-    system_id=$1
-
-    time_start=$(date +%s)
-    time_end=${time_start}
-    status_name=$(maas ${maas_profile} machine read ${system_id} | jq ".status_name" | sed s/\"//g)
-    while [[ ${status_name} != "Ready" ]] && [[ $( echo ${time_end} - ${time_start} | bc ) -le ${commission_timeout} ]]
-    do
-        sleep 20
-        status_name=$(maas ${maas_profile} machine read ${system_id} | jq ".status_name" | sed s/\"//g)
-        time_end=$(date +%s)
-    done
-}
-
 # Calls the functions that destroys and cleans up all the VMs
 wipe_vms() {
+    install_deps
     maas_login
     destroy_vms
 }
@@ -300,6 +247,9 @@ show_help() {
   -d    Releases VMs, Clears Disk
   "
 }
+
+# Initialise the configs
+read_config
 
 while getopts ":cwd" opt; do
   case $opt in

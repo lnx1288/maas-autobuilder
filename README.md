@@ -4,12 +4,12 @@ This is a quick-and-dirty set of shell scripts that will build out and
 bootstrap a MAAS environment with all of the bits and pieces you need to get
 it running for any cloud, any workload.
 
-* `manage-maas-nodes`...: Create kvm instances that MAAS will manage
-* `bootstrap--maas.sh`..: Build and bootstrap your MAAS environment
+* `manage-maas-nodes.sh.......`: Create kvm instances that MAAS will manage
+* `manage-hypervisor-nodes.sh.`: Create hypervisors that MAAS will manage
+* `bootstrap-maas.sh..........`: Build and bootstrap your MAAS environment
 
 There are plenty of options to customize its behavior, as well as drop in to
 any step of the process without rebuilding the full MAAS from scratch.
-
 
 ## Requirements
 
@@ -17,7 +17,6 @@ Requires, minimally, `bash`, `jq` and a working Ubuntu environment.  This
 has **not** been tested on CentOS or Debian, but should work minimally on
 those environments, if you choose to make that your host.  Patches are
 welcome, of course.
-
 
 ## Components
 
@@ -44,7 +43,6 @@ newer PostgreSQL dependencies.
 
 MAAS from snap is also not supported (yet) again for the same SQL
 dependencies which are included inside the MAAS snap.
-
 
 ## TODO and What's Next
 

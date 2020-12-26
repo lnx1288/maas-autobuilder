@@ -1,22 +1,17 @@
-qemu_connection="qemu+ssh://virt@10.0.1.252/system"
-qemu_password="5b5Bnev4kh3QeDGQ4KK8bVtX"
-storage_path="/var/lib/vz/maas"
+qemu_connection="qemu+ssh://virsh@10.0.1.253/system"
+qemu_password="seBGtkWFKZuFUFgig8NYU5uh"
+storage_path="/var/lib/libvirt/maas-images"
 
-compute="hp1-maas-node"
+compute="maas-node"
 
 control_count=1
 control_cpus=3
 control_ram=8192
 
-node_count=7
+node_count=11
 node_start=1
 node_cpus=2
 node_ram=4096
-
-disks=()
-disks+=(50)
-disks+=(20)
-disks+=(20)
 
 network_type=bridge
 
