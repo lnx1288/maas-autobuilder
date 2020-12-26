@@ -157,6 +157,7 @@ destroy_node() {
     maas ${maas_profile} pod delete ${pod_id}
 
     system_id=$(maas_system_id ${hypervisor_name})
+    maas ${maas_profile} machine release ${system_id}
     maas ${maas_profile} machine delete ${system_id}
 }
 
