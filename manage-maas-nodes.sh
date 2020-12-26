@@ -78,7 +78,7 @@ wipe_disks() {
         maas ${maas_profile} machine release ${system_id}
 
         # Ensure that the machine is in ready state before the next step
-        ensure_machine_ready ${system_id}
+        ensure_machine_in_state ${system_id} "Ready"
 
         # Stop the machine if it is running
         virsh --connect qemu:///system shutdown "$virt_node"
