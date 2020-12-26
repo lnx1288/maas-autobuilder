@@ -97,10 +97,10 @@ maas_add_node()
     node_type=$3
 
     machine_type="vm"
-    [[ $node_type == "physical"]] && machine_type="$node_type"
+    [[ $node_type == "physical" ]] && machine_type="$node_type"
 
     if [[ $machine_type == "vm" ]] ; then
-        power_type=-"virsh"
+        power_type="virsh"
         power_params="power_parameters_power_id=${node_name}"
         power_params+=" power_parameters_power_address=${qemu_connection}"
         power_params+=" power_parameters_power_pass=${qemu_password}"
