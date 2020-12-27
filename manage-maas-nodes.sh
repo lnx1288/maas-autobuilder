@@ -55,20 +55,45 @@ wipe_vms() {
     destroy_vms
 }
 
-fix_networks()
+# Fixes all the networks on all the VMs
+network_auto()
 {
     install_deps
     maas_login
-    fix_maas_networks
-}
 
-# Fixes all the networks on all the VMs
-fix_maas_networks() {
     for ((virt="$node_start"; virt<=node_count; virt++)); do
         printf -v virt_node %s-%02d "$compute" "$virt"
         system_id=$(maas_system_id ${virt_node})
 
         maas_auto_assign_networks ${system_id} &
+    done
+    wait
+}
+
+commision_vm()
+{
+    system_id=$1
+
+    maas ${maas_profile} machine commission ${system_id}
+
+    # Ensure that the machine is in ready state before the next step
+    ensure_machine_in_state ${system_id} "Ready"
+
+    maas_auto_assign_networks ${system_id}
+}
+
+recommission_vms()
+{
+    install_deps
+    maas_login
+
+    for ((virt="$node_start"; virt<=node_count; virt++)); do
+        printf -v virt_node %s-%02d "$compute" "$virt"
+        system_id=$(maas_system_id ${virt_node})
+
+        commission_vm ${system_id} &
+
+        sleep ${build_fanout}
     done
     wait
 }
@@ -238,13 +263,15 @@ show_help() {
   -c    Creates everything
   -w    Removes everything
   -d    Releases VMs, Clears Disk
+  -n    Updates all the networks on all VMs
+  -r    Recommission all VMs
   "
 }
 
 # Initialise the configs
 read_config
 
-while getopts ":cwd" opt; do
+while getopts ":cwdnr" opt; do
   case $opt in
     c)
         create_vms
@@ -256,7 +283,10 @@ while getopts ":cwd" opt; do
         wipe_disks
         ;;
     n)
-        fix_networks
+        network_auto
+        ;;
+    r)
+        recommission_vms
         ;;
     \?)
         printf "Unrecognized option: -%s. Valid options are:" "$OPTARG" >&2
