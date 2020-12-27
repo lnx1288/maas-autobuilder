@@ -70,7 +70,7 @@ network_auto()
     wait
 }
 
-commision_vm()
+commission_vm()
 {
     system_id=$1
 
