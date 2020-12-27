@@ -55,6 +55,24 @@ wipe_vms() {
     destroy_vms
 }
 
+fix_networks()
+{
+    install_deps
+    maas_login
+    fix_maas_networks
+}
+
+# Fixes all the networks on all the VMs
+fix_maas_networks() {
+    for ((virt="$node_start"; virt<=node_count; virt++)); do
+        printf -v virt_node %s-%02d "$compute" "$virt"
+        system_id=$(maas_system_id ${virt_node})
+
+        maas_auto_assign_networks ${system_id} &
+    done
+    wait
+}
+
 # Creates the disks for all the nodes
 create_storage() {
     for ((virt="$node_start"; virt<=node_count; virt++)); do
@@ -236,6 +254,9 @@ while getopts ":cwd" opt; do
         ;;
     d)
         wipe_disks
+        ;;
+    n)
+        fix_networks
         ;;
     \?)
         printf "Unrecognized option: -%s. Valid options are:" "$OPTARG" >&2
