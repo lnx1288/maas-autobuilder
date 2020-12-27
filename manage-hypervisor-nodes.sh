@@ -34,7 +34,7 @@ maas_assign_networks()
             vlan_int=$(maas ${maas_profile} interfaces create-vlan ${system_id} vlan=${maas_vlan_id} parent=$phys_int_id)
             vlan_int_id=$(echo $vlan_int | jq .id | sed s/\"//g)
             if [[ $vlan -eq $external_vlan ]] ; then
-		# Set the external IP to be static as per the configuration
+                # Set the external IP to be static as per the configuration
                 mode="STATIC"
                 ip_addr="ip_address=$external_ip"
             else

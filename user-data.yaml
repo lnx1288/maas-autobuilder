@@ -41,9 +41,13 @@ write_files:
     ./manage-maas-nodes.sh -c
   permissions: '0755'
   owner: root:root
-- path: /root/update_sshd.sh
+- path: /root/linux_kvm.sh
   content: |
     #!/bin/bash
+
+    mkdir -p /home/virsh/bin
+    ln -s /usr/bin/virsh /home/virsh/bin/virsh
+    sh -c echo "PATH=/home/virsh/bin" >> /home/virsh/.bashrc
 
     cat >> /etc/ssh/sshd_config << EOF
     Match user virsh
@@ -58,11 +62,8 @@ write_files:
 
 # Runs any command that we need to run post install
 runcmd:
-  - [ "mkdir", "-p", "/home/virsh/bin" ]
-  - [ "ln", "-s", "/usr/bin/virsh", "/home/virsh/bin/virsh" ]
-  - [ "sh", "-c", 'echo "PATH=/home/virsh/bin" >> /home/virsh/.bashrc' ]
-  - [ "/root/update_sshd.sh" ]
-  - [ "rm", "/root/update_sshd.sh" ]
+  - [ "/root/linux_kvm.sh" ]
+  - [ "rm", "/root/linux_kvm.sh" ]
   - [ "usermod", "-a", "-G", "libvirt", "virsh" ]
   - [ "usermod", "-a", "-G", "libvirt-qemu", "virsh" ]
   - [ "efibootmgr", "-n", "0001"]
