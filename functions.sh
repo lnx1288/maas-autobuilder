@@ -19,7 +19,7 @@ install_deps()
 maas_login()
 {
     # Login to MAAS using the API key and the endpoint
-    echo ${maas_api_key} | maas login ${maas_profile} ${maas_endpoint} -
+    login=$(echo ${maas_api_key} | maas login ${maas_profile} ${maas_endpoint} -)
 }
 
 # Grabs the unique system_id for the host human readable hostname
@@ -46,11 +46,11 @@ machine_add_tag()
 
     # If the tag doesn't exist, then create it
     if [[ $(maas ${maas_profile} tag read ${tag}) == "Not Found" ]] ; then
-        maas ${maas_profile} tags create name=${tag}
+        tag_create=$(maas ${maas_profile} tags create name=${tag})
     fi
 
     # Assign the tag to the machine
-    maas ${maas_profile} tag update-nodes ${tag} add=${system_id}
+    tag_update=$(maas ${maas_profile} tag update-nodes ${tag} add=${system_id})
 }
 
 # This takes the system_id, and ensures that the machine is in $state state
@@ -115,7 +115,7 @@ maas_add_node()
         hostname=${node_name}            \
         mac_addresses=${mac_addr}        \
         architecture=amd64/generic       \
-        power_type=${power_type} ${power_params}
+        power_type=${power_type} ${power_params} > /dev/null
 
     # Grabs the system_id for th node that we are adding
     system_id=$(maas_system_id ${node_name})

@@ -71,15 +71,15 @@ install_node() {
 # The purpose of this function is to stop, release the nodes and wipe the disks
 destroy_node() {
     pod_id=$(maas_pod_id ${hypervisor_name})
-    maas ${maas_profile} pod delete ${pod_id}
+    pod_delete=$(maas ${maas_profile} pod delete ${pod_id})
 
     system_id=$(maas_system_id ${hypervisor_name})
-    maas ${maas_profile} machine delete ${system_id}
+    machine_delete=$(maas ${maas_profile} machine delete ${system_id})
 }
 
 deploy_node() {
     system_id=$(maas_system_id ${hypervisor_name})
-    maas ${maas_profile} machine deploy ${system_id} user_data="$(base64 user-data.yaml)"
+    maas ${maas_profile} machine deploy ${system_id} user_data="$(base64 user-data.yaml)" > /dev/null
 
     # Only return when the node has finised deploying
     ensure_machine_in_state ${system_id} "Deployed"

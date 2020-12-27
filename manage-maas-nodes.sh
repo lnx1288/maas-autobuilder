@@ -26,7 +26,7 @@ maas_auto_assign_networks()
 
     # Grabs all the interfaces that are attached to the system
     node_interfaces=$(maas ${maas_profile} interfaces read ${system_id} \
-        | jq ".[] | {id:.id, name:.name, mode:.links[].mode, subnet:.links[].subnet.id, vlan:.links[].subnet.vlan.vid }" --compact-output)
+        | jq ".[] | {id:.id, name:.name, mode:.links[].mode, subnet:.links[].subnet.id, vlan:.vlan.vid }" --compact-output)
 
     # This for loop will go through all the interfaces and enable Auto-Assign
     # on all ports
@@ -36,10 +36,27 @@ maas_auto_assign_networks()
         subnet_id=$(echo $interface | jq ".subnet" | sed s/\"//g)
         mode=$(echo $interface | jq ".mode" | sed s/\"//g)
         vlan=$(echo $interface | jq ".vlan" | sed s/\"//g)
-        if [[ $mode != "auto" ]] ; then
+
+        # Although the vlan would have been set the discovered vlan wouldn't,
+        # and therefore link[] and discovery[] list won't exist. So we grab
+        # the subnet details from subnets that have the vlan assigned/discovered
+        # at commissioning stage
+        if [[ $subnet_id == null ]] ; then
+            subnet_line=$(maas admin subnets read | jq ".[] | {subnet_id:.id, vlan:.vlan.vid, vlan_id:.vlan.id}" --compact-output | grep "vlan\":$vlan,")
+            subnet_id=$(echo $subnet_line | jq .subnet_id | sed s/\"//g)
+        fi
+        # If vlan is the external network, then we want to grab IP via DHCP
+        # from the external network. Other networks would be auto mode
+        if [[ $vlan -eq $external_vlan ]] && [[ $mode != "dhcp" ]]; then
+            new_mode="DHCP"
+        elif [[ $mode != "auto" ]] && [[ $mode != "dhcp" ]] ; then
             new_mode="AUTO"
-            [[ $vlan -eq $external_vlan ]] && new_mode="DHCP"
-            maas ${maas_profile} interface link-subnet ${system_id} ${int_id} mode=${new_mode} subnet=${subnet_id}
+        fi
+
+        # Then finally set link details for all the interfaces that haven't
+        # been configured already
+        if [[ $new_mode != "AUTO" ]] || [[ $new_mode != "DHCP" ]]; then
+            assign_network=$(maas ${maas_profile} interface link-subnet ${system_id} ${int_id} mode=${new_mode} subnet=${subnet_id})
         fi
     done
 }
@@ -59,11 +76,26 @@ wipe_vms() {
     destroy_vms
 }
 
+# Fixes all the networks on all the VMs
+network_auto()
+{
+    install_deps
+    maas_login
+
+    for ((virt="$node_start"; virt<=node_count; virt++)); do
+        printf -v virt_node %s-%02d "$compute" "$virt"
+        system_id=$(maas_system_id ${virt_node})
+
+        maas_auto_assign_networks ${system_id} &
+    done
+    wait
+}
+
 commission_vm()
 {
     system_id=$1
 
-    maas ${maas_profile} machine commission ${system_id}
+    commission_machine=$(maas ${maas_profile} machine commission ${system_id})
 
     # Ensure that the machine is in ready state before the next step
     ensure_machine_in_state ${system_id} "Ready"
@@ -112,7 +144,7 @@ wipe_disks() {
         system_id=$(maas_system_id ${virt_node})
 
         # Release the machine in MAAS
-        maas ${maas_profile} machine release ${system_id}
+        release_machine=$(maas ${maas_profile} machine release ${system_id})
 
         # Ensure that the machine is in ready state before the next step
         ensure_machine_in_state ${system_id} "Ready"
@@ -242,7 +274,7 @@ destroy_vms() {
 
         # Now remove the VM from MAAS
         system_id=$(maas_system_id ${virt_node})
-        maas ${maas_profile} machine delete ${system_id}
+        delete_machine=$(maas ${maas_profile} machine delete ${system_id})
     done
 }
 
@@ -252,6 +284,7 @@ show_help() {
   -c    Creates everything
   -w    Removes everything
   -d    Releases VMs, Clears Disk
+  -n    Updates all the networks on all VMs
   -r    Recommission all VMs
   "
 }
@@ -269,6 +302,9 @@ while getopts ":cwdnr" opt; do
         ;;
     d)
         wipe_disks
+        ;;
+    n)
+        network_auto
         ;;
     r)
         recommission_vms
