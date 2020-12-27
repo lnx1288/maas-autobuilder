@@ -13,8 +13,13 @@ stg_bus="scsi"
 # Time between building VMs
 build_fanout=60
 
-# Attempts to auto assign all the networks for a host
 maas_assign_networks()
+{
+    maas_auto_assign_networks $1
+}
+
+# Attempts to auto assign all the networks for a host
+maas_auto_assign_networks()
 {
     system_id=$1
 
@@ -81,6 +86,7 @@ wipe_disks() {
         ensure_machine_in_state ${system_id} "Ready"
 
         # Stop the machine if it is running
+        # It's probably stopped anyway as per the release above
         virsh --connect qemu:///system shutdown "$virt_node"
 
         # Remove the disks

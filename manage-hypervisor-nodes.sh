@@ -6,7 +6,8 @@
 # Time between building VMs
 build_fanout=60
 
-# Attempts to auto assign all the networks for a host
+# Adds all the subnets, vlans and therefore bridges to the hypervisor, all
+# based on the configuration from hypervisor.config and/or default.config
 maas_assign_networks()
 {
     system_id=$1
@@ -24,6 +25,8 @@ maas_assign_networks()
         maas_subnet_id=$(echo $subnet_line | jq .subnet_id | sed s/\"//g)
         ip_addr=""
         if [[ $i -eq 0 ]] ; then
+            # Set the first interface to be static as per the configuration so that it
+            # consistent over re-provisioning of the system
             vlan_int_id=${phys_int_id}
             mode="STATIC"
             ip_addr="ip_address=$hypervisor_ip"
@@ -31,9 +34,11 @@ maas_assign_networks()
             vlan_int=$(maas ${maas_profile} interfaces create-vlan ${system_id} vlan=${maas_vlan_id} parent=$phys_int_id)
             vlan_int_id=$(echo $vlan_int | jq .id | sed s/\"//g)
             if [[ $vlan -eq $external_vlan ]] ; then
+		# Set the external IP to be static as per the configuration
                 mode="STATIC"
                 ip_addr="ip_address=$external_ip"
             else
+                # Set everything else to be auto assigned
                 mode="AUTO"
             fi
         fi

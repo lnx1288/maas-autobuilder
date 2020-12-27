@@ -102,7 +102,7 @@ maas_add_node()
     if [[ $machine_type == "vm" ]] ; then
         power_type="virsh"
         power_params="power_parameters_power_id=${node_name}"
-        power_params+=" power_parameters_power_address=${qemu_connection}"
+        power_params+=" power_parameters_power_address=qemu+ssh://${virsh_user}@${hypervisor_ip}/system"
         power_params+=" power_parameters_power_pass=${qemu_password}"
     else
         power_type="manual"
@@ -134,7 +134,6 @@ read_config()
     configs=""
     configs+=" configs/default.config"
     configs+=" configs/maas.config"
-    configs+=" configs/hypervisor.common.config"
     configs+=" configs/hypervisor.config"
 
     for config in $configs ; do
