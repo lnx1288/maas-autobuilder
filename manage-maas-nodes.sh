@@ -19,13 +19,14 @@ maas_assign_networks()
 }
 
 # Attempts to auto assign all the networks for a host
+# Note: This only works straight after a commissioning of a machine
 maas_auto_assign_networks()
 {
     system_id=$1
 
     # Grabs all the interfaces that are attached to the system
     node_interfaces=$(maas ${maas_profile} interfaces read ${system_id} \
-        | jq ".[] | {id:.id, name:.name, mode:.links[].mode, subnet:.links[].subnet.id }" --compact-output)
+        | jq ".[] | {id:.id, name:.name, mode:.links[].mode, subnet:.links[].subnet.id, vlan:.links[].subnet.vlan.vid }" --compact-output)
 
     # This for loop will go through all the interfaces and enable Auto-Assign
     # on all ports
@@ -34,8 +35,11 @@ maas_auto_assign_networks()
         int_id=$(echo $interface | jq ".id" | sed s/\"//g)
         subnet_id=$(echo $interface | jq ".subnet" | sed s/\"//g)
         mode=$(echo $interface | jq ".mode" | sed s/\"//g)
+        vlan=$(echo $interface | jq ".vlan" | sed s/\"//g)
         if [[ $mode != "auto" ]] ; then
-            maas ${maas_profile} interface link-subnet ${system_id} ${int_id} mode="AUTO" subnet=${subnet_id}
+            new_mode="AUTO"
+            [[ $vlan -eq $external_vlan ]] && new_mode="DHCP"
+            maas ${maas_profile} interface link-subnet ${system_id} ${int_id} mode=${new_mode} subnet=${subnet_id}
         fi
     done
 }
@@ -53,21 +57,6 @@ wipe_vms() {
     install_deps
     maas_login
     destroy_vms
-}
-
-# Fixes all the networks on all the VMs
-network_auto()
-{
-    install_deps
-    maas_login
-
-    for ((virt="$node_start"; virt<=node_count; virt++)); do
-        printf -v virt_node %s-%02d "$compute" "$virt"
-        system_id=$(maas_system_id ${virt_node})
-
-        maas_auto_assign_networks ${system_id} &
-    done
-    wait
 }
 
 commission_vm()
@@ -263,7 +252,6 @@ show_help() {
   -c    Creates everything
   -w    Removes everything
   -d    Releases VMs, Clears Disk
-  -n    Updates all the networks on all VMs
   -r    Recommission all VMs
   "
 }
@@ -281,9 +269,6 @@ while getopts ":cwdnr" opt; do
         ;;
     d)
         wipe_disks
-        ;;
-    n)
-        network_auto
         ;;
     r)
         recommission_vms
