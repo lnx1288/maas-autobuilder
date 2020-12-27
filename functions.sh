@@ -127,6 +127,8 @@ maas_add_node()
     # Ensure that all the networks on the system have the Auto-Assign set
     # so that the all the of the networks on the host have an IP automatically.
     maas_assign_networks ${system_id}
+
+    [[ $machine_type == "physical" ]] && maas_create_partitions ${system_id}
 }
 
 read_config()

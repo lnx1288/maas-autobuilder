@@ -49,6 +49,26 @@ maas_assign_networks()
     done
 }
 
+maas_create_partitions()
+{
+    system_id=$1
+
+    size=20
+
+    actual_size=$(( $size * 1024 * 1024 * 1024 ))
+
+    storage_layout=$(maas ${maas_profile} machine set-storage-layout ${system_id} storage_layout=lvm vg_name=${hypervisor_name} lv_name=root lv_size=${actual_size})
+
+    vg_device=$(echo $storage_layout | jq ".volume_groups[].id" )
+    remaining_space=$(maas ${maas_profile} volume-group read ${system_id} ${vg_device} | jq ".available_size" | sed s/\"//g)
+
+    libvirt_lv=$(maas ${maas_profile} volume-group create-logical-volume ${system_id} ${vg_device} name=libvirt size=${remaining_space})
+    libvirt_block_id=$(echo ${libvirt_lv} | jq .id)
+
+    stg_fs=$(maas ${maas_profile} block-device format ${system_id} ${libvirt_block_id} fstype=ext4)
+    stg_mount=$(maas ${maas_profile} block-device mount ${system_id} ${libvirt_block_id} mount_point=${storage_path})
+}
+
 # Calls the functions that destroys and cleans up all the VMs
 wipe_node() {
     install_deps
@@ -66,6 +86,26 @@ install_node() {
     install_deps
     maas_login
     deploy_node
+}
+
+# Fixes all the networks on all the VMs
+network_auto()
+{
+    install_deps
+    maas_login
+
+    system_id=$(maas_system_id ${hypervisor_name})
+    maas_assign_networks ${system_id}
+}
+
+# Fixes all the networks on all the VMs
+create_partitions()
+{
+    install_deps
+    maas_login
+
+    system_id=$(maas_system_id ${hypervisor_name})
+    maas_create_partitions ${system_id}
 }
 
 # The purpose of this function is to stop, release the nodes and wipe the disks
@@ -92,12 +132,14 @@ show_help() {
   -w    Removes Hypervisor
   -d    Deploy Hypervisor
   -a    Create and Deploy
+  -n    Assign Networks
+  -p    Update Partitioning
   "
 }
 
 read_config
 
-while getopts ":cwia" opt; do
+while getopts ":cwianp" opt; do
   case $opt in
     c)
         create_node
@@ -111,6 +153,12 @@ while getopts ":cwia" opt; do
     a)
         create_node
         install_node
+        ;;
+    n)
+        network_auto
+        ;;
+    p)
+        create_partitions
         ;;
     \?)
         printf "Unrecognized option: -%s. Valid options are:" "$OPTARG" >&2
