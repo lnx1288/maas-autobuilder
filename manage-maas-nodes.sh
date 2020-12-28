@@ -69,6 +69,14 @@ create_vms() {
     build_vms
 }
 
+# Calls the 3 functions that creates the VMs
+create_juju() {
+    install_deps
+    maas_login
+    create_storage "juju"
+    build_vms "juju"
+}
+
 # Calls the functions that destroys and cleans up all the VMs
 wipe_vms() {
     install_deps
@@ -121,6 +129,16 @@ recommission_vms()
 
 # Creates the disks for all the nodes
 create_storage() {
+    # To keep a track of how many juju VMs we have created
+    only_juju="false"
+    node_count_bak=$node_count
+    if [[ $1 == "juju" ]] ; then
+        node_count=0
+        if [[ $juju_count -lt 1 ]] ; then
+            echo "WARNING: requested only create juju, but juju_count = ${juju_count}"
+            return 0
+        fi
+    fi
     for ((virt="$node_start"; virt<=node_count; virt++)); do
         printf -v virt_node %s-%02d "$compute" "$virt"
 
@@ -133,14 +151,35 @@ create_storage() {
                 "$storage_path/$virt_node/$virt_node-d$((${disk} + 1)).img" "${disks[$disk]}"G &
         done
     done
+    for ((juju=1; juju<=juju_count; juju++)); do
+        printf -v virt_node %s-%02d "$hypervisor_name-juju" "$juju"
+
+        # Create th directory where the storage files will be located
+        mkdir -p "$storage_path/$virt_node"
+
+        /usr/bin/qemu-img create -f "$storage_format" \
+            "$storage_path/$virt_node/$virt_node.img" "${juju_disk}"G &
+    done
+    node_count=$node_count_bak
     wait
 }
 
 # The purpose of this function is to stop, release the nodes and wipe the disks
 # to save space, and then so that the machines in MAAS can be re-used
 wipe_disks() {
+    juju_total=1
+    doing_juju="false"
     for ((virt="$node_start"; virt<=node_count; virt++)); do
-        printf -v virt_node %s-%02d "$compute" "$virt"
+        if [[ $juju_total -le $juju_count ]] ; then
+            printf -v virt_node %s-%02d "$hypervisor_name-juju" "$juju_total"
+            doing_juju="true"
+            (( virt-- ))
+            (( juju_total++ ))
+        else
+            printf -v virt_node %s-%02d "$compute" "$virt"
+            doing_juju="false"
+        fi
+
         system_id=$(maas_system_id ${virt_node})
 
         # Release the machine in MAAS
@@ -154,11 +193,14 @@ wipe_disks() {
         virsh --connect qemu:///system shutdown "$virt_node"
 
         # Remove the disks
-        for ((disk=0;disk<${#disks[@]};disk++)); do
-            rm -rf "$storage_path/$virt_node/$virt_node-d$((${disk} + 1)).img" &
-        done
+        if [[ $doing_juju == "true" ]] ; then
+            rm -rf "$storage_path/$virt_node/$virt_node.img"
+        else
+            for ((disk=0;disk<${#disks[@]};disk++)); do
+                rm -rf "$storage_path/$virt_node/$virt_node-d$((${disk} + 1)).img" &
+            done
+        fi
     done
-
     # Re-create the storage again from scratch
     create_storage
     wait
@@ -166,21 +208,18 @@ wipe_disks() {
 
 # Builds the VMs from scratch, and then adds them to MAAS
 build_vms() {
-    for ((virt="$node_start"; virt<=node_count; virt++)); do
-        printf -v virt_node %s-%02d "$compute" "$virt"
-
-        # Based on the variables in hypervisor.config, we define the variables
-        # for ram and cpus. This also allows a number of control nodes that
-        # can be defined as part of full set of nodes.
-        ram="$node_ram"
-        vcpus="$node_cpus"
-        node_type="compute"
-        if [[ $virt -le $control_count ]] ; then
-            ram="$control_ram"
-            vcpus="$control_cpus"
-            node_type="control"
+    # To keep a track of how many juju VMs we have created
+    juju_total=1
+    only_juju="false"
+    if [[ $1 == "juju" ]] ; then
+        only_juju="true"
+        if [[ $juju_count -lt 1 ]] ; then
+            echo "WARNING: requested only create juju, but juju_count = ${juju_count}"
+            return 0
         fi
-        bus=$stg_bus
+    fi
+
+    for ((virt="$node_start"; virt<=node_count; virt++)); do
 
         # Based on the bridges array, it will generate these amount of MAC
         # addresses and then create the network definitions to add to
@@ -204,13 +243,45 @@ build_vms() {
             network_spec+=" --network=$net_prefix="${net_type[$mac]}",mac="${macaddr[$mac]}",model=$nic_model"
         done
 
-        # Based on the disks array, it will create a definition to add these
-        # disks to the VM
-        disk_spec=""
-        for ((disk=0;disk<${#disks[@]};disk++)); do
-            disk_spec+=" --disk path=$storage_path/$virt_node/$virt_node-d$((${disk} + 1)).img"
-            disk_spec+=",format=$storage_format,size=${disks[$disk]},bus=$bus,io=native,cache=directsync"
-        done
+        if [[ $juju_total -le $juju_count ]] ; then
+            printf -v virt_node %s-%02d "$hypervisor_name-juju" "$juju_total"
+
+            ram="$juju_ram"
+            vcpus="$juju_cpus"
+            node_type="juju"
+
+            network_spec="--network=$net_prefix="${net_type[0]}",mac="${macaddr[0]}",model=$nic_model"
+
+            disk_spec="--disk path=$storage_path/$virt_node/$virt_node.img"
+            disk_spec+=",format=$storage_format,size=${juju_disk},bus=$stg_bus,io=native,cache=directsync"
+
+            # So that we have the right amount of VMs
+            (( virt-- ))
+            (( juju_total++ ))
+            # This will ensure that we only create the juju VMs
+            [[ $only_juju == "true" ]] && [[ $juju_total -gt $juju_count ]] && virt=$(( $node_count + 1 ))
+        else
+            printf -v virt_node %s-%02d "$compute" "$virt"
+            # Based on the variables in hypervisor.config, we define the variables
+            # for ram and cpus. This also allows a number of control nodes that
+            # can be defined as part of full set of nodes.
+            ram="$node_ram"
+            vcpus="$node_cpus"
+            node_type="compute"
+            if [[ $virt -le $control_count ]] ; then
+                ram="$control_ram"
+                vcpus="$control_cpus"
+                node_type="control"
+            fi
+
+            # Based on the disks array, it will create a definition to add these
+            # disks to the VM
+            disk_spec=""
+            for ((disk=0;disk<${#disks[@]};disk++)); do
+                disk_spec+=" --disk path=$storage_path/$virt_node/$virt_node-d$((${disk} + 1)).img"
+                disk_spec+=",format=$storage_format,size=${disks[$disk]},bus=$stg_bus,io=native,cache=directsync"
+            done
+        fi
 
         # Creates the VM with all the attributes given
         virt-install -v --noautoconsole   \
@@ -222,11 +293,10 @@ build_vms() {
             --name "$virt_node"           \
             --ram "$ram"                  \
             --vcpus "$vcpus"              \
-            --os-variant "ubuntu18.04"    \
             --console pty,target_type=serial \
             --graphics spice,clipboard_copypaste=no,mouse_mode=client,filetransfer_enable=off \
             --cpu host-passthrough,cache.mode=passthrough  \
-            --controller "$bus",model=virtio-scsi,index=0  \
+            --controller "$stg_bus",model=virtio-scsi,index=0  \
             $disk_spec \
             $network_spec > "$virt_node.xml" &&
 
@@ -248,8 +318,19 @@ build_vms() {
 }
 
 destroy_vms() {
-    for ((node="$node_start"; node<=node_count; node++)); do
-        printf -v virt_node %s-%02d "$compute" "$node"
+    juju_total=1
+    doing_juju="false"
+    for ((virt="$node_start"; virt<=node_count; virt++)); do
+        if [[ $juju_total -le $juju_count ]] ; then
+            printf -v virt_node %s-%02d "$hypervisor_name-juju" "$juju_total"
+
+            doing_juju="true"
+            (( virt-- ))
+            (( juju_total++ ))
+        else
+            printf -v virt_node %s-%02d "$compute" "$virt"
+            doing_juju="false"
+        fi
 
         # If the domain is running, this will complete, else throw a warning
         virsh --connect qemu:///system destroy "$virt_node"
@@ -258,9 +339,13 @@ destroy_vms() {
         virsh --connect qemu:///system undefine "$virt_node"
 
         # Remove the three storage volumes from disk
-        for ((disk=0;disk<${#disks[@]};disk++)); do
-            virsh vol-delete --pool "$virt_node" "$virt_node-d$((${disk} + 1)).img"
-        done
+        if [[ $doing_juju = "true" ]] ; then
+            virsh vol-delete --pool "$virt_node" "$virt_node.img"
+        else
+            for ((disk=0;disk<${#disks[@]};disk++)); do
+                virsh vol-delete --pool "$virt_node" "$virt_node-d$((${disk} + 1)).img"
+            done
+        fi
 
         # Remove the folder storage is located
         rm -rf "$storage_path/$virt_node/"
@@ -286,13 +371,14 @@ show_help() {
   -d    Releases VMs, Clears Disk
   -n    Updates all the networks on all VMs
   -r    Recommission all VMs
+  -j    Only create juju VM
   "
 }
 
 # Initialise the configs
 read_config
 
-while getopts ":cwdnr" opt; do
+while getopts ":cwjdnr" opt; do
   case $opt in
     c)
         create_vms
@@ -308,6 +394,9 @@ while getopts ":cwdnr" opt; do
         ;;
     r)
         recommission_vms
+        ;;
+    j)
+        create_juju
         ;;
     \?)
         printf "Unrecognized option: -%s. Valid options are:" "$OPTARG" >&2

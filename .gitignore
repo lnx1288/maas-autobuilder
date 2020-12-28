@@ -1,3 +1,4 @@
 maas.config
 maas.debconf
 *.xml
+*.yaml
