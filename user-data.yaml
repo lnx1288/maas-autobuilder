@@ -3,6 +3,10 @@
 ssh_import_id:
   - lp:arif-ali
 
+byobu_by_default: enable
+
+timezone: "Europe/London"
+
 # Allow ssh passwords
 ssh_pwauth: True
 
