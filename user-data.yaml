@@ -70,6 +70,13 @@ write_files:
     usermod -a -G libvirt,libvirt-qemu virsh
   permissions: '0755'
   owner: root:root
+- path: /root/wipe_disk.sh
+  content: |
+    #!/bin/bash
+
+    dd if=/dev/zero of=/dev/sda bs=1M count=1000
+  permissions: '0755'
+  owner: root:root
 
 # Runs any command that we need to run post install
 runcmd:
