@@ -1,7 +1,7 @@
 #cloud-config
 
 ssh_import_id:
-- lp:arif-ali
+  - lp:arif-ali
 
 # Allow ssh passwords
 ssh_pwauth: True
@@ -24,59 +24,63 @@ packages:
   - jq
   - ksmtuned
 
+snap:
+  commands:
+    - ['install', 'maas']
+
 ## Write arbitrary files to the file-system (including binaries!)
 write_files:
-- path: /root/initial_setup.sh
-  content: |
-    #!/bin/bash
+  - path: /root/initial_setup.sh
+    content: |
+      #!/bin/bash
 
-    git clone https://github.com/arif-ali/maas-autobuilder.git /root/maas-autobuilder
-    cd /root/maas-autobuilder/configs
-    ln -sf ${HOSTNAME}.config hypervisor.config
+      git clone https://github.com/arif-ali/maas-autobuilder.git /root/maas-autobuilder
+      cd /root/maas-autobuilder/configs
+      ln -sf ${HOSTNAME}.config hypervisor.config
 
-    cd ../
-    chmod +x manage-maas-nodes.sh
-    ./manage-maas-nodes.sh -c
-  permissions: '0755'
-  owner: root:root
-- path: /root/install_kvm.sh
-  content: |
-    #!/bin/bash
+      cd ../
+      chmod +x manage-maas-nodes.sh
+      ./manage-maas-nodes.sh -c
+    permissions: '0755'
+    owner: root:root
+  - path: /root/install_kvm.sh
+    content: |
+      #!/bin/bash
 
-    series=$(grep UBUNTU_CODENAME /etc/os-release | sed -e 's/UBUNTU_CODENAME=//g')
+      series=$(grep UBUNTU_CODENAME /etc/os-release | sed -e 's/UBUNTU_CODENAME=//g')
 
-    if [[ $series == "bionic" ]]
-        pkgs="qemu-kvm libvirt-bin qemu-efi"
-    else
-        pkgs="libvirt-daemon-system libvirt-clients"
-    fi
+      if [[ $series == "bionic" ]]
+          pkgs="qemu-kvm libvirt-bin qemu-efi"
+      else
+          pkgs="libvirt-daemon-system libvirt-clients"
+      fi
 
-    apt -y update
-    apt -y install $pkgs
+      apt -y update
+      apt -y install $pkgs
 
-    mkdir -p /home/virsh/bin
-    ln -s /usr/bin/virsh /home/virsh/bin/virsh
-    sh -c echo "PATH=/home/virsh/bin" >> /home/virsh/.bashrc
+      mkdir -p /home/virsh/bin
+      ln -s /usr/bin/virsh /home/virsh/bin/virsh
+      sh -c echo "PATH=/home/virsh/bin" >> /home/virsh/.bashrc
 
-    cat >> /etc/ssh/sshd_config << EOF
-    Match user virsh
-        X11Forwarding no
-        AllowTcpForwarding no
-        PermitTTY no
-        ForceCommand nc -q 0 -U /var/run/libvirt/libvirt-sock
-    EOF
-    systemctl restart sshd
+      cat >> /etc/ssh/sshd_config << EOF
+      Match user virsh
+          X11Forwarding no
+          AllowTcpForwarding no
+          PermitTTY no
+          ForceCommand nc -q 0 -U /var/run/libvirt/libvirt-sock
+      EOF
+      systemctl restart sshd
 
-    usermod -a -G libvirt,libvirt-qemu virsh
-  permissions: '0755'
-  owner: root:root
-- path: /root/wipe_disk.sh
-  content: |
-    #!/bin/bash
+      usermod -a -G libvirt,libvirt-qemu virsh
+    permissions: '0755'
+    owner: root:root
+  - path: /root/wipe_disk.sh
+    content: |
+      #!/bin/bash
 
-    dd if=/dev/zero of=/dev/sda bs=1M count=1000
-  permissions: '0755'
-  owner: root:root
+      dd if=/dev/zero of=/dev/sda bs=1M count=1000
+    permissions: '0755'
+    owner: root:root
 
 # Runs any command that we need to run post install
 runcmd:
