@@ -47,7 +47,7 @@ write_files:
     content: |
       #!/bin/bash
 
-      series=$(grep UBUNTU_CODENAME /etc/os-release | sed -e 's/UBUNTU_CODENAME=//g')
+      series=$(lsb_release -c -s)
 
       if [[ $series == "bionic" ]]
           pkgs="qemu-kvm libvirt-bin qemu-efi"
