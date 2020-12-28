@@ -147,8 +147,11 @@ create_storage() {
 
         # For all the disks that are defined in the array, create a disk
         for ((disk=0;disk<${#disks[@]};disk++)); do
-            /usr/bin/qemu-img create -f "$storage_format" \
-                "$storage_path/$virt_node/$virt_node-d$((${disk} + 1)).img" "${disks[$disk]}"G &
+            file_name="$storage_path/$virt_node/$virt_node-d$((${disk} + 1)).img"
+
+            if [[ ! -f $file_name ]] ; then
+                /usr/bin/qemu-img create -f "$storage_format" "${file_name}" "${disks[$disk]}"G &
+            fi
         done
     done
     for ((juju=1; juju<=juju_count; juju++)); do
@@ -157,8 +160,11 @@ create_storage() {
         # Create th directory where the storage files will be located
         mkdir -p "$storage_path/$virt_node"
 
-        /usr/bin/qemu-img create -f "$storage_format" \
-            "$storage_path/$virt_node/$virt_node.img" "${juju_disk}"G &
+        file_name="$storage_path/$virt_node/$virt_node.img"
+
+        if [[ ! -f $file_name ]] ; then
+            /usr/bin/qemu-img create -f "$storage_format" ${file_name} "${juju_disk}"G &
+        fi
     done
     node_count=$node_count_bak
     wait
