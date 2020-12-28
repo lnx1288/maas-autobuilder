@@ -7,7 +7,11 @@ state_timeout=1200
 install_deps()
 {
     # Install some of the dependent packages
-    sudo apt -y update && sudo apt -y install jq bc virtinst
+    deps="jq bc"
+    if [[ "$0" == "*manage-maas-*" ]] ; then
+        deps+=" virtinst"
+    fi
+    sudo apt -y update && sudo apt -y install ${deps}
 
     # We install the snap, as maas-cli is not in distributions, this ensures
     # that the package we invoke would be consistent

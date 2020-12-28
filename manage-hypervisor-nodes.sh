@@ -20,7 +20,7 @@ maas_assign_networks()
     i=0
     for vlan in ${vlans[*]}
     do
-        subnet_line=$(maas admin subnets read | jq ".[] | {subnet_id:.id, vlan:.vlan.vid, vlan_id:.vlan.id}" --compact-output | grep "vlan\":$vlan,")
+        subnet_line=$(maas admin subnets read | jq ".[] | {subnet_id:.id, vlan:.vlan.vid, vlan_id:.vlan.id}" --compact-output | grep "vlan\":$vlan," | head -n 1)
         maas_vlan_id=$(echo $subnet_line | jq .vlan_id | sed s/\"//g)
         maas_subnet_id=$(echo $subnet_line | jq .subnet_id | sed s/\"//g)
         ip_addr=""
@@ -69,6 +69,13 @@ maas_create_partitions()
     stg_mount=$(maas ${maas_profile} block-device mount ${system_id} ${libvirt_block_id} mount_point=${storage_path})
 }
 
+maas_add_pod()
+{
+    pod_create=$(maas ${maas_profile} pods create power_address="qemu+ssh://${virsh_user}@${hypervisor_ip}/system" power_user="${virsh_user}" power_pass="${qemu_password}" type="virsh")
+    pod_id=$(echo $pod_create | jq ".id" | sed s/\"//g)
+    pod_name=$(maas ${maas_profile} pod update ${pod_id} name=${hypervisor_name})
+}
+
 # Calls the functions that destroys and cleans up all the VMs
 wipe_node() {
     install_deps
@@ -86,6 +93,14 @@ install_node() {
     install_deps
     maas_login
     deploy_node
+    maas_add_pod
+}
+
+add_pod()
+{
+    install_deps
+    maas_login
+    maas_add_pod
 }
 
 # Fixes all the networks on all the VMs
@@ -128,18 +143,19 @@ deploy_node() {
 show_help() {
   echo "
 
-  -c    Creates Hypervisor
-  -w    Removes Hypervisor
-  -d    Deploy Hypervisor
   -a    Create and Deploy
+  -c    Creates Hypervisor
+  -d    Deploy Hypervisor
+  -k    Add Hypervisor as Pod
   -n    Assign Networks
   -p    Update Partitioning
+  -w    Removes Hypervisor
   "
 }
 
 read_config
 
-while getopts ":cwdanp" opt; do
+while getopts ":cwdaknp" opt; do
   case $opt in
     c)
         create_node
@@ -153,6 +169,9 @@ while getopts ":cwdanp" opt; do
     a)
         create_node
         install_node
+        ;;
+    k)
+        add_pod
         ;;
     n)
         network_auto
