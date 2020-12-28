@@ -34,9 +34,10 @@ write_files:
     #!/bin/bash
 
     git clone https://github.com/arif-ali/maas-autobuilder.git /root/maas-autobuilder
-    cd /root/maas-autobuilder
+    cd /root/maas-autobuilder/configs
     ln -sf ${HOSTNAME}.config hypervisor.config
 
+    cd ../
     chmod +x manage-maas-nodes.sh
     ./manage-maas-nodes.sh -c
   permissions: '0755'

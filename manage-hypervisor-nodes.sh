@@ -139,7 +139,7 @@ show_help() {
 
 read_config
 
-while getopts ":cwianp" opt; do
+while getopts ":cwdanp" opt; do
   case $opt in
     c)
         create_node
