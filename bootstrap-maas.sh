@@ -144,43 +144,46 @@ build_maas() {
     [[ -n "$maas_boot_source" ]] && maas $maas_profile boot-source update 1 url="$maas_boot_source"
     [[ -n "$package_repository" ]] && maas $maas_profile package-repository update 1 name='main_archive' url="$package_repository"
 
+    # Ensure that we are only grabbing amd64 and not other arches as well
+    maas $maas_profile boot-source-selection update 1 1 arches="amd64"
+
     # This is hacky, but it's the only way I could find to reliably get the
     # correct subnet for the maas bridge interface
     maas $maas_profile subnet update "$(maas $maas_profile subnets read | jq -rc --arg maas_ip "$maas_ip_range" '.[] | select(.name | contains($maas_ip)) | "\(.id)"')" \
-	    gateway_ip="$maas_bridge_ip" dns_servers="$maas_bridge_ip"
+        gateway_ip="$maas_bridge_ip" dns_servers="$maas_bridge_ip"
+
     sleep 3
 
     i=0
     for space in ${maas_spaces[*]} ; do
-	fabric_id=$(maas admin fabrics read | jq ".[] | {id:.id, vlan:.vlans[].vid, fabric:.name}" --compact-output | grep fabric-0 | jq ".id")
-	space_object=$(maas ${maas_profile} spaces create name=${space})
-	echo $space_object | jq .
-	space_id=$(echo $space_object | jq ".id")
-	vlan_object=$(maas ${maas_profile} vlans create fabric-0 vid=${maas_vlans[$i]} space=${space_id})
-	echo $vlan_object | jq .
-	vlan_id=$(echo $vlan_object | jq ".id")
-	maas ${maas_profile} subnet update "$(maas $maas_profile subnets read | jq -rc --arg maas_ip "${maas_subnets[$i]}" '.[] | select(.name | contains($maas_ip)) | "\(.id)"')" vlan=${vlan_id}
+        fabric_id=$(maas admin fabrics read | jq ".[] | {id:.id, vlan:.vlans[].vid, fabric:.name}" --compact-output | grep fabric-0 | jq ".id")
+        space_object=$(maas ${maas_profile} spaces create name=${space})
+        echo $space_object | jq .
+        space_id=$(echo $space_object | jq ".id")
+        vlan_object=$(maas ${maas_profile} vlans create fabric-0 vid=${maas_vlans[$i]} space=${space_id})
+        echo $vlan_object | jq .
+        vlan_id=$(echo $vlan_object | jq ".id")
+        maas ${maas_profile} subnet update "$(maas $maas_profile subnets read | jq -rc --arg maas_ip "${maas_subnets[$i]}" '.[] | select(.name | contains($maas_ip)) | "\(.id)"')" vlan=${vlan_id}
 
-	maas_int_id=$(maas ${maas_profile} interfaces read ${maas_system_id} | jq -rc --arg int_ip "${maas_subnets[$i]}" '.[] | select(.links[].subnet.name | contains($int_ip)) | "\(.id)"')
+        maas_int_id=$(maas ${maas_profile} interfaces read ${maas_system_id} | jq -rc --arg int_ip "${maas_subnets[$i]}" '.[] | select(.links[].subnet.name | contains($int_ip)) | "\(.id)"')
 
         maas ${maas_profile} interface update ${maas_system_id} ${maas_int_id} vlan=${vlan_id}
 
-	if [[ $space != "external" ]] ; then
+        if [[ $space != "external" ]] ; then
             maas ${maas_profile} ipranges create type=dynamic start_ip="${maas_subnets[$i]}.101" end_ip="${maas_subnets[$i]}.199"
             maas $maas_profile vlan update fabric-0 ${maas_vlans[$i]} dhcp_on=True primary_rack="$maas_system_id"
-	fi
-	(( i++ ))
-
+        fi
+        (( i++ ))
     done
 
     if [[ $maas_pkg_type == "deb" ]]; then
         # This is needed, because it points to localhost by default and will fail to
         # commission/deploy in this state
-        echo "DEBUG: http://$maas_bridge_ip:5240/MAAS/"
+        echo "DEBUG: ${maas_endpoint}"
 
         sudo debconf-set-selections maas.debconf
         sleep 2
-        # sudo maas-rack config --region-url "http://$maas_bridge_ip:5240/MAAS/" && sudo service maas-rackd restart
+        # sudo maas-rack config --region-url "${maas_endpoint}" && sudo service maas-rackd restart
         sudo DEBIAN_FRONTEND=noninteractive dpkg-reconfigure maas-rack-controller
         sleep 2
 
@@ -191,6 +194,14 @@ build_maas() {
 }
 
 bootstrap_maas() {
+    # The release that is is downloading by default
+    default_release=$(maas $maas_profile boot-source-selection read 1 1 | jq .release)
+
+    # Add bionic if the default is focal
+    if [[ $default_release == "focal" ]] ; then
+        maas ${maas_profile} boot-source-selections update 1 os="ubuntu" release="bionic" arches="amd64" subarches="*" labels="*"
+    fi
+
     # Import the base images; this can take some time
     echo "Importing boot images, please be patient, this may take some time..."
     maas $maas_profile boot-resources import
@@ -287,7 +298,6 @@ apt-http-proxy: $squid_proxy
 apt-https-proxy: $squid_proxy
 EOF
 fi
-
 
     echo "Adding cloud............: $cloud_name"
     # juju add-cloud --replace "$cloud_name" clouds-"$rand_uuid".yaml
