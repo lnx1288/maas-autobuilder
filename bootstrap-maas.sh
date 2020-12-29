@@ -163,7 +163,8 @@ build_maas() {
         vlan_object=$(maas ${maas_profile} vlans create fabric-0 vid=${maas_vlans[$i]} space=${space_id})
         echo $vlan_object | jq .
         vlan_id=$(echo $vlan_object | jq ".id")
-        maas ${maas_profile} subnet update "$(maas $maas_profile subnets read | jq -rc --arg maas_ip "${maas_subnets[$i]}" '.[] | select(.name | contains($maas_ip)) | "\(.id)"')" vlan=${vlan_id}
+        subnet_id=$(maas $maas_profile subnets read | jq -rc --arg maas_ip "${maas_subnets[$i]}" '.[] | select(.name | contains($maas_ip)) | "\(.id)"')
+        maas ${maas_profile} subnet update $subnet_id vlan=${vlan_id} managed=False
 
         maas_int_id=$(maas ${maas_profile} interfaces read ${maas_system_id} | jq -rc --arg int_ip "${maas_subnets[$i]}" '.[] | select(.links[].subnet.name | contains($int_ip)) | "\(.id)"')
 
@@ -172,6 +173,9 @@ build_maas() {
         if [[ $space != "external" ]] ; then
             maas ${maas_profile} ipranges create type=dynamic start_ip="${maas_subnets[$i]}.101" end_ip="${maas_subnets[$i]}.199"
             maas $maas_profile vlan update fabric-0 ${maas_vlans[$i]} dhcp_on=True primary_rack="$maas_system_id"
+
+            # Force MAAS to manage all subnets except for external
+            maas $maas_profile subnet update $subnet_id managed=True
         fi
         (( i++ ))
     done

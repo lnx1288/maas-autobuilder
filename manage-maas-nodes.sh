@@ -50,7 +50,7 @@ maas_auto_assign_networks()
         if [[ $vlan -eq $external_vlan ]] && [[ $mode != "dhcp" ]]; then
             new_mode="DHCP"
         elif [[ $mode != "auto" ]] && [[ $mode != "dhcp" ]] ; then
-            new_mode="DHCP"
+            new_mode="AUTO"
         fi
 
         # Then finally set link details for all the interfaces that haven't
