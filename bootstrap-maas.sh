@@ -17,15 +17,15 @@ check_bins() {
 }
 
 read_config() {
-    if [ ! -f maas.config ]; then
+    if [ ! -f configs/maas.config ]; then
         printf "Error: missing config file. Please create the file 'maas.config'.\n"
         exit 1
     else
         shopt -s extglob
-        maas_config="maas.config"
+        maas_config="configs/maas.config"
         source "$maas_config"
     fi
-    if [ ! -f maas.debconf ]; then
+    if [[ $maas_pkg_type != "snap" ]]  && [ ! -f maas.debconf ]; then
         printf "Error: missing debconf file. Please create the file 'maas.debconf'.\n"
         exit 1
     fi
@@ -43,7 +43,13 @@ init_variables() {
     maas_snaps=( maas maas-test-db )
 }
 
-remove_maas() {
+remove_maas()
+{
+    [[ $maas_pkg_type == "deb" ]] && remove_maas_deb
+    [[ $maas_pkg_type == "snap" ]] && remove_maas_snap
+}
+
+remove_maas_deb() {
     # Drop the MAAS db ("maasdb"), so we don't risk reusing it
     sudo -u postgres psql -c "select pg_terminate_backend(pid) from pg_stat_activity where datname='maasdb'"
     sudo -u postgres psql -c "drop database maasdb"
@@ -62,7 +68,13 @@ remove_maas_snap() {
     sudo snap remove ${maas_snaps[@]}
 }
 
-install_maas() {
+install_maas()
+{
+    [[ $maas_pkg_type == "deb" ]] && install_maas_deb
+    [[ $maas_pkg_type == "snap" ]] && install_maas_snap
+}
+
+install_maas_deb() {
     # This is separate from the removal, so we can handle them atomically
     sudo apt-get -fuy --reinstall install "${core_packages}" "${maas_packages[@]}" "${pg_packages[@]}"
     sudo sed -i 's/DISPLAY_LIMIT=5/DISPLAY_LIMIT=100/' /usr/share/maas/web/static/js/bundle/maas-min.js
@@ -70,7 +82,9 @@ install_maas() {
 
 install_maas_snap() {
     sudo apt-get -fuy --reinstall install "${core_packages}"
-    sudo snap install ${maas_snaps[@]} --channel=$maas_version/stable
+    for snap in ${maas_snaps[*]} ; do
+        sudo snap install ${snap} --channel=$maas_version/stable
+    done
 }
 
 purge_admin_user() {
@@ -83,28 +97,31 @@ with deleted_user as (delete from auth_user where username = '$maas_profile' ret
      delete from piston3_consumer where user_id = (select id from deleted_user);
 EOF
 
-    psql_cmd="psql"
-    [[ $maas_pkg_type == "snap" ]] && psql_cmd="maas-test-db.psql"
-
-    sudo -u postgres $psql_cmd -c "$purgeadmin" maasdb
+    [[ $maas_pkg_type == "snap" ]] && maas-test-db.psql -c "$purgeadmin" maasdb
+    [[ $maas_pkg_type == "deb" ]] && sudo -u postgres psql -c "$purgeadmin" maasdb
 }
 
 build_maas() {
     # Create the initial 'admin' user of MAAS, purge first!
     purge_admin_user
+
+    [[ $maas_pkg_type == "snap" ]] && maas init region+rack --database-uri maas-test-db:/// --maas-url $maas_endpoint --force
+
     sudo maas createadmin --username "$maas_profile" --password "$maas_pass" --email "$maas_profile"@"$maas_pass" --ssh-import lp:"$launchpad_user"
 
-    sudo chsh -s /bin/bash maas
-    sudo chown -R maas:maas /var/lib/maas
+    if [[ $maas_pkg_type == "deb" ]] ; then
+      sudo chsh -s /bin/bash maas
+      sudo chown -R maas:maas /var/lib/maas
+    fi
 
     if [ -f ~/.maas-api.key ]; then
         rm ~/.maas-api.key
+    fi
 
-        maas_cmd="maas-region"
-        [[ $maas_pkg_type == "snap" ]] && maas_cmd="maas"
+    maas_cmd="maas-region"
+    [[ $maas_pkg_type == "snap" ]] && maas_cmd="maas"
 
-        maas_api_key="$(sudo ${maas_cmd} apikey --username $maas_profile | head -n 1 | tee ~/.maas-api.key)"
-    fi;
+    maas_api_key="$(sudo ${maas_cmd} apikey --username $maas_profile | head -n 1 | tee ~/.maas-api.key)"
 
     # Fetch the MAAS API key, store to a file for later reuse, also set this var to that value
     maas login "$maas_profile" "$maas_endpoint" "$maas_api_key"
@@ -112,36 +129,54 @@ build_maas() {
     maas_system_id="$(maas $maas_profile nodes read hostname="$HOSTNAME" | jq -r '.[].interface_set[0].system_id')"
 
     # Inject the maas SSH key
-    maas_ssh_key=$(<~/.ssh/maas_rsa.pub)
-    maas $maas_profile sshkeys create "key=$maas_ssh_key"
+    #maas_ssh_key=$(<~/.ssh/maas_rsa.pub)
+    #maas $maas_profile sshkeys create "key=$maas_ssh_key"
 
     # Update settings to match our needs
     maas $maas_profile maas set-config name=default_storage_layout value=lvm
     maas $maas_profile maas set-config name=network_discovery value=disabled
     maas $maas_profile maas set-config name=active_discovery_interval value=0
-    maas $maas_profile maas set-config name=kernel_opts value="console=ttyS0,115200 console=tty0,115200 elevator=noop zswap.enabled=1 zswap.compressor=lz4 zswap.max_pool_percent=20 zswap.zpool=z3fold intel_iommu=on iommu=pt debug nosplash scsi_mod.use_blk_mq=1 dm_mod.use_blk_mq=1 enable_mtrr_cleanup mtrr_spare_reg_nr=1 systemd.log_level=debug"
-    maas $maas_profile maas set-config name=maas_name value=us-east
+    #maas $maas_profile maas set-config name=kernel_opts value="console=ttyS0,115200 console=tty0,115200 elevator=noop zswap.enabled=1 zswap.compressor=lz4 zswap.max_pool_percent=20 zswap.zpool=z3fold intel_iommu=on iommu=pt debug nosplash scsi_mod.use_blk_mq=1 dm_mod.use_blk_mq=1 enable_mtrr_cleanup mtrr_spare_reg_nr=1 systemd.log_level=debug"
+    #maas $maas_profile maas set-config name=maas_name value=us-east
     maas $maas_profile maas set-config name=upstream_dns value="$maas_upstream_dns"
     maas $maas_profile maas set-config name=dnssec_validation value=no
     maas $maas_profile maas set-config name=enable_analytics value=false
-    maas $maas_profile maas set-config name=enable_http_proxy value=true
+    # maas $maas_profile maas set-config name=enable_http_proxy value=true
     # maas $maas_profile maas set-config name=http_proxy value="$squid_proxy"
     maas $maas_profile maas set-config name=enable_third_party_drivers value=false
     maas $maas_profile maas set-config name=curtin_verbose value=true
 
-    maas $maas_profile boot-source update 1 url="$maas_boot_source"
+    # maas $maas_profile boot-source update 1 url="$maas_boot_source"
     # maas $maas_profile boot-source update 1 url=http://"$maas_bridge_ip":8765/maas/images/ephemeral-v3/daily/
-    maas $maas_profile package-repository update 1 name='main_archive' url="$package_repository"
+    # maas $maas_profile package-repository update 1 name='main_archive' url="$package_repository"
 
     # This is hacky, but it's the only way I could find to reliably get the
     # correct subnet for the maas bridge interface
     maas $maas_profile subnet update "$(maas $maas_profile subnets read | jq -rc --arg maas_ip "$maas_ip_range" '.[] | select(.name | contains($maas_ip)) | "\(.id)"')" gateway_ip="$maas_bridge_ip"
     sleep 3
 
-    maas $maas_profile ipranges create type=dynamic start_ip="$maas_subnet_start" end_ip="$maas_subnet_end" comment='This is the reserved range for MAAS nodes'
+    i=0
+    for space in ${maas_spaces[*]} ; do
+	fabric_id=$(maas admin fabrics read | jq ".[] | {id:.id, vlan:.vlans[].vid, fabric:.name}" --compact-output | grep fabric-0 | jq ".id")
+	space_object=$(maas ${maas_profile} spaces create name=${space})
+	echo $space_object | jq .
+	space_id=$(echo $space_object | jq ".id")
+	vlan_object=$(maas ${maas_profile} vlans create fabric-0 vid=${maas_vlans[$i]} space=${space_id})
+	echo $vlan_object | jq .
+	vlan_id=$(echo $vlan_object | jq ".id")
+	maas ${maas_profile} subnet update "$(maas $maas_profile subnets read | jq -rc --arg maas_ip "${maas_subnets[$i]}" '.[] | select(.name | contains($maas_ip)) | "\(.id)"')" vlan=${vlan_id}
 
-    sleep 3
-    maas $maas_profile vlan update fabric-1 0 dhcp_on=True primary_rack="$maas_system_id"
+	maas_int_id=$(maas ${maas_profile} interfaces read ${maas_system_id} | jq -rc --arg int_ip "${maas_subnets[$i]}" '.[] | select(.links[].subnet.name | contains($int_ip)) | "\(.id)"')
+
+        maas ${maas_profile} interface update ${maas_system_id} ${maas_int_id} vlan=${vlan_id}
+
+	if [[ $space != "external" ]] ; then
+            maas ${maas_profile} ipranges create type=dynamic start_ip="${maas_subnets[$i]}.101" end_ip="${maas_subnets[$i]}.199"
+            maas $maas_profile vlan update fabric-0 ${maas_vlans[$i]} dhcp_on=True primary_rack="$maas_system_id"
+	fi
+	(( i++ ))
+
+    done
 
     if [[ $maas_pkg_type == "deb" ]]; then
         # This is needed, because it points to localhost by default and will fail to
@@ -168,21 +203,21 @@ bootstrap_maas() {
     until [ "$(maas $maas_profile boot-resources is-importing)" = false ]; do sleep 3; done;
 
     # Add a chassis with nodes we want to build against
-    maas $maas_profile machines add-chassis chassis_type=virsh prefix_filter=maas-node hostname="$virsh_chassis"
+    #maas $maas_profile machines add-chassis chassis_type=virsh prefix_filter=maas-node hostname="$virsh_chassis"
 
     # This is necessary to allow MAAS to quiesce the imported chassis
     echo "Pausing while chassis is imported..."
     sleep 10
 
     # Commission those nodes (requires that image import step has completed)
-    maas $maas_profile machines accept-all
+    #maas $maas_profile machines accept-all
 
     # Grab the first node in the chassis and commission it
     # maas_node=$(maas $maas_profile machines read | jq -r '.[0].system_id')
     # maas "$maas_profile" machine commission -d "$maas_node"
 
     # Acquire all images marked "Ready"
-    maas $maas_profile machines allocate
+    #maas $maas_profile machines allocate
 
     # Deploy the node you just commissioned and acquired
     # maas "$maas_profile" machine deploy $maas_node
