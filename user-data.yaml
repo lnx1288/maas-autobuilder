@@ -53,7 +53,7 @@ write_files:
 
       series=$(lsb_release -c -s)
 
-      if [[ $series == "bionic" ]]
+      if [[ $series == "bionic" ]] ; then
           pkgs="qemu-kvm libvirt-bin qemu-efi"
       else
           pkgs="libvirt-daemon-system libvirt-clients"

@@ -93,7 +93,7 @@ install_node() {
     install_deps
     maas_login
     deploy_node
-    #maas_add_pod
+    maas_add_pod
 }
 
 add_pod()
