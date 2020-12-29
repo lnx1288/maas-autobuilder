@@ -212,6 +212,22 @@ wipe_disks() {
     wait
 }
 
+machine_exists()
+{
+    node_name=$1
+
+    virsh_machine=$(virsh list --all --name | grep ${node_name})
+
+    if [[ $virsh_machine != "" ]] ; then
+        macaddr=$(virsh domiflist ${node_name} | grep br0 | awk '{print $5}')
+
+        echo $macaddr
+    else
+        echo "false"
+    fi
+
+}
+
 # Builds the VMs from scratch, and then adds them to MAAS
 build_vms() {
     # To keep a track of how many juju VMs we have created
@@ -287,6 +303,18 @@ build_vms() {
                 disk_spec+=" --disk path=$storage_path/$virt_node/$virt_node-d$((${disk} + 1)).img"
                 disk_spec+=",format=$storage_format,size=${disks[$disk]},bus=$stg_bus,io=native,cache=directsync"
             done
+        fi
+
+        # Check to see if the libvirt machine already exists. If it exists
+        # then just use the same one again and commission in MAAS
+        check_machine=$(machine_exists ${virt_node})
+        if [[ $check_machine != "false" ]] ; then
+            macaddr=$check_machine
+
+            maas_add_node ${virt_node} ${macaddr} ${node_type} &
+
+            sleep ${build_fanout}
+            continue
         fi
 
         # Creates the VM with all the attributes given
