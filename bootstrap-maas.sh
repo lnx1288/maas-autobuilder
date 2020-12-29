@@ -43,12 +43,6 @@ init_variables() {
     maas_snaps=( maas maas-test-db )
 }
 
-remove_maas()
-{
-    [[ $maas_pkg_type == "deb" ]] && remove_maas_deb
-    [[ $maas_pkg_type == "snap" ]] && remove_maas_snap
-}
-
 remove_maas_deb() {
     # Drop the MAAS db ("maasdb"), so we don't risk reusing it
     sudo -u postgres psql -c "select pg_terminate_backend(pid) from pg_stat_activity where datname='maasdb'"
@@ -68,12 +62,6 @@ remove_maas_snap() {
     sudo snap remove ${maas_snaps[@]}
 }
 
-install_maas()
-{
-    [[ $maas_pkg_type == "deb" ]] && install_maas_deb
-    [[ $maas_pkg_type == "snap" ]] && install_maas_snap
-}
-
 install_maas_deb() {
     # This is separate from the removal, so we can handle them atomically
     sudo apt-get -fuy --reinstall install "${core_packages}" "${maas_packages[@]}" "${pg_packages[@]}"
@@ -82,6 +70,8 @@ install_maas_deb() {
 
 install_maas_snap() {
     sudo apt-get -fuy --reinstall install "${core_packages}"
+
+    # When we specify the channel, we have to install the snaps individually
     for snap in ${maas_snaps[*]} ; do
         sudo snap install ${snap} --channel=$maas_version/stable
     done
@@ -128,9 +118,11 @@ build_maas() {
 
     maas_system_id="$(maas $maas_profile nodes read hostname="$HOSTNAME" | jq -r '.[].interface_set[0].system_id')"
 
-    # Inject the maas SSH key
-    #maas_ssh_key=$(<~/.ssh/maas_rsa.pub)
-    #maas $maas_profile sshkeys create "key=$maas_ssh_key"
+    # Inject the maas SSH key if it exists
+    if [ -f ~/.ssh/maas_rsa.pub ]; then
+        maas_ssh_key=$(<~/.ssh/maas_rsa.pub)
+        maas $maas_profile sshkeys create "key=$maas_ssh_key"
+    fi
 
     # Update settings to match our needs
     maas $maas_profile maas set-config name=default_storage_layout value=lvm
@@ -141,18 +133,21 @@ build_maas() {
     maas $maas_profile maas set-config name=upstream_dns value="$maas_upstream_dns"
     maas $maas_profile maas set-config name=dnssec_validation value=no
     maas $maas_profile maas set-config name=enable_analytics value=false
-    # maas $maas_profile maas set-config name=enable_http_proxy value=true
-    # maas $maas_profile maas set-config name=http_proxy value="$squid_proxy"
     maas $maas_profile maas set-config name=enable_third_party_drivers value=false
     maas $maas_profile maas set-config name=curtin_verbose value=true
 
-    # maas $maas_profile boot-source update 1 url="$maas_boot_source"
-    # maas $maas_profile boot-source update 1 url=http://"$maas_bridge_ip":8765/maas/images/ephemeral-v3/daily/
-    # maas $maas_profile package-repository update 1 name='main_archive' url="$package_repository"
+    if [[ -n "$squid_proxy" ]] ; then
+        maas $maas_profile maas set-config name=enable_http_proxy value=true
+        maas $maas_profile maas set-config name=http_proxy value="$squid_proxy"
+    fi
+
+    [[ -n "$maas_boot_source" ]] && maas $maas_profile boot-source update 1 url="$maas_boot_source"
+    [[ -n "$package_repository" ]] && maas $maas_profile package-repository update 1 name='main_archive' url="$package_repository"
 
     # This is hacky, but it's the only way I could find to reliably get the
     # correct subnet for the maas bridge interface
-    maas $maas_profile subnet update "$(maas $maas_profile subnets read | jq -rc --arg maas_ip "$maas_ip_range" '.[] | select(.name | contains($maas_ip)) | "\(.id)"')" gateway_ip="$maas_bridge_ip"
+    maas $maas_profile subnet update "$(maas $maas_profile subnets read | jq -rc --arg maas_ip "$maas_ip_range" '.[] | select(.name | contains($maas_ip)) | "\(.id)"')" \
+	    gateway_ip="$maas_bridge_ip" dns_servers="$maas_bridge_ip"
     sleep 3
 
     i=0
@@ -203,21 +198,21 @@ bootstrap_maas() {
     until [ "$(maas $maas_profile boot-resources is-importing)" = false ]; do sleep 3; done;
 
     # Add a chassis with nodes we want to build against
-    #maas $maas_profile machines add-chassis chassis_type=virsh prefix_filter=maas-node hostname="$virsh_chassis"
+    [[ -n "$virsh_chassis" ]] && maas $maas_profile machines add-chassis chassis_type=virsh prefix_filter=maas-node hostname="$virsh_chassis"
 
     # This is necessary to allow MAAS to quiesce the imported chassis
     echo "Pausing while chassis is imported..."
     sleep 10
 
     # Commission those nodes (requires that image import step has completed)
-    #maas $maas_profile machines accept-all
+    maas $maas_profile machines accept-all
 
     # Grab the first node in the chassis and commission it
     # maas_node=$(maas $maas_profile machines read | jq -r '.[0].system_id')
     # maas "$maas_profile" machine commission -d "$maas_node"
 
-    # Acquire all images marked "Ready"
-    #maas $maas_profile machines allocate
+    # Acquire all machines marked "Ready"
+    # maas $maas_profile machines allocate
 
     # Deploy the node you just commissioned and acquired
     # maas "$maas_profile" machine deploy $maas_node
@@ -336,8 +331,8 @@ while getopts ":a:bc:ij:nt:r" opt; do
   case $opt in
     a )
         check_bins
-        remove_maas
-        install_maas
+        remove_maas_${maas_pkg_type}
+        install_maas_${maas_pkg_type}
         build_maas
         bootstrap_maas
         add_cloud "$OPTARG"
@@ -345,7 +340,7 @@ while getopts ":a:bc:ij:nt:r" opt; do
     b )
         echo "Building out a new MAAS server"
         check_bins
-        install_maas
+        install_maas_${maas_pkg_type}
         build_maas
         bootstrap_maas
         exit 0
@@ -357,7 +352,7 @@ while getopts ":a:bc:ij:nt:r" opt; do
         ;;
     i )
         echo "Installing MAAS and PostgreSQL dependencies"
-        install_maas
+        install_maas_${maas_pkg_type}
         exit 0
         ;;
     j )
@@ -366,7 +361,7 @@ while getopts ":a:bc:ij:nt:r" opt; do
         exit 0
         ;;
     r )
-        remove_maas
+        remove_maas_${maas_pkg_type}
         exit 0
         ;;
     t )
