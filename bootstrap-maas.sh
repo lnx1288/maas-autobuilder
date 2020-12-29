@@ -226,7 +226,9 @@ add_cloud() {
     fi
     rand_uuid=$(uuid -F siv)
     cloud_name="$1"
-    maas_api_key=$(<~/.maas-api.key)
+    if [ -f ~/.maas-api.key ]; then
+        maas_api_key=$(<~/.maas-api.key)
+    fi
 
 cat > clouds-"$rand_uuid".yaml <<EOF
 clouds:
@@ -237,16 +239,27 @@ clouds:
     # endpoint: ${maas_endpoint:0:-8}
     endpoint: $maas_endpoint
     config:
+      enable-os-refresh-update: true
+      enable-os-upgrade: false
+      logging-config: <root>=DEBUG
+EOF
+
+if [[ -n "$package_repository" ]] ; then
+cat >> clouds-"$rand_uuid".yaml <<EOF
       apt-mirror: $package_repository
+EOF
+fi
+
+# Only add the proxy stuff if its set
+if [[ -n "$squid_proxy" ]] ; then
+cat >> clouds-"$rand_uuid".yaml <<EOF
       apt-http-proxy: $squid_proxy
       apt-https-proxy: $squid_proxy
       snap-http-proxy: $squid_proxy
       snap-https-proxy: $squid_proxy
       # snap-store-proxy: $snap_store_proxy
-      enable-os-refresh-update: true
-      enable-os-upgrade: false
-      logging-config: <root>=DEBUG
 EOF
+fi
 
 cat > credentials-"$rand_uuid".yaml <<EOF
 credentials:
@@ -260,25 +273,32 @@ cat > config-"$rand_uuid".yaml <<EOF
 automatically-retry-hooks: true
 mongo-memory-profile: default
 default-series: bionic
+transmit-vendor-metrics: false
+EOF
+
+# Only add the proxy stuff if its set
+if [[ -n "$squid_proxy" ]] ; then
+cat >> config-"$rand_uuid".yaml <<EOF
 juju-ftp-proxy: $squid_proxy
 juju-http-proxy: $squid_proxy
 juju-https-proxy: $squid_proxy
 juju-no-proxy: $no_proxy
 apt-http-proxy: $squid_proxy
 apt-https-proxy: $squid_proxy
-transmit-vendor-metrics: false
 EOF
+fi
+
 
     echo "Adding cloud............: $cloud_name"
     # juju add-cloud --replace "$cloud_name" clouds-"$rand_uuid".yaml
-    juju update-cloud "$cloud_name" -f clouds-"$rand_uuid".yaml
+    juju update-cloud "$cloud_name" --local -f clouds-"$rand_uuid".yaml
 
     echo "Adding credentials for..: $cloud_name"
     #juju add-credential --replace "$cloud_name" -f credentials-"$rand_uuid".yaml
-    juju add-credential "$cloud_name" -f credentials-"$rand_uuid".yaml
+    juju add-credential "$cloud_name" --local -f credentials-"$rand_uuid".yaml
 
     echo "Details for cloud.......: $cloud_name..."
-    juju clouds --format json | jq --arg cloud "$cloud_name" '.[$cloud]'
+    juju clouds --local --format json | jq --arg cloud "$cloud_name" '.[$cloud]'
 
     juju bootstrap "$cloud_name" --debug --config=config-"$rand_uuid".yaml
 
@@ -287,7 +307,9 @@ EOF
         rm -f clouds-"$rand_uuid".yaml credentials-"$rand_uuid".yaml config-"$rand_uuid".yaml
     fi
 
-    juju enable-ha
+    # Only enable HA if the variable is set and true
+    [[ -n "$juju_ha" ]] && [[ $juju_ha == "true" ]] && juju enable-ha
+
     juju machines -m controller
 }
 
