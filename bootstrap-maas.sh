@@ -147,6 +147,18 @@ build_maas() {
     # Ensure that we are only grabbing amd64 and not other arches as well
     maas $maas_profile boot-source-selection update 1 1 arches="amd64"
 
+    # The release that is is downloading by default
+    default_release=$(maas $maas_profile boot-source-selection read 1 1 | jq .release | sed s/\"//g)
+
+    # Add bionic if the default is focal
+    if [[ $default_release == "focal" ]] ; then
+        maas ${maas_profile} boot-source-selections update 1 os="ubuntu" release="bionic" arches="amd64" subarches="*" labels="*"
+    fi
+
+    # Import the base images; this can take some time
+    echo "Importing boot images, please be patient, this may take some time..."
+    maas $maas_profile boot-resources import
+
     # This is hacky, but it's the only way I could find to reliably get the
     # correct subnet for the maas bridge interface
     maas $maas_profile subnet update "$(maas $maas_profile subnets read | jq -rc --arg maas_ip "$maas_ip_range" '.[] | select(.name | contains($maas_ip)) | "\(.id)"')" \
@@ -164,7 +176,7 @@ build_maas() {
         echo $vlan_object | jq .
         vlan_id=$(echo $vlan_object | jq ".id")
         subnet_id=$(maas $maas_profile subnets read | jq -rc --arg maas_ip "${maas_subnets[$i]}" '.[] | select(.name | contains($maas_ip)) | "\(.id)"')
-        maas ${maas_profile} subnet update $subnet_id vlan=${vlan_id} managed=False
+        maas ${maas_profile} subnet update $subnet_id vlan=${vlan_id}
 
         maas_int_id=$(maas ${maas_profile} interfaces read ${maas_system_id} | jq -rc --arg int_ip "${maas_subnets[$i]}" '.[] | select(.links[].subnet.name | contains($int_ip)) | "\(.id)"')
 
@@ -175,6 +187,7 @@ build_maas() {
             maas $maas_profile vlan update fabric-0 ${maas_vlans[$i]} dhcp_on=True primary_rack="$maas_system_id"
 
             # Force MAAS to manage all subnets except for external
+            maas $maas_profile subnet update $subnet_id managed=False
             maas $maas_profile subnet update $subnet_id managed=True
         fi
         (( i++ ))
@@ -198,17 +211,6 @@ build_maas() {
 }
 
 bootstrap_maas() {
-    # The release that is is downloading by default
-    default_release=$(maas $maas_profile boot-source-selection read 1 1 | jq .release)
-
-    # Add bionic if the default is focal
-    if [[ $default_release == "focal" ]] ; then
-        maas ${maas_profile} boot-source-selections update 1 os="ubuntu" release="bionic" arches="amd64" subarches="*" labels="*"
-    fi
-
-    # Import the base images; this can take some time
-    echo "Importing boot images, please be patient, this may take some time..."
-    maas $maas_profile boot-resources import
 
     until [ "$(maas $maas_profile boot-resources is-importing)" = false ]; do sleep 3; done;
 
@@ -357,8 +359,8 @@ if [ $# -eq 0 ]; then
 fi
 
 # Load up some initial variables from the config and package arrays
-init_variables
 read_config
+init_variables
 
 # This is the proxy that MAAS itself uses (the "internal" MAAS proxy)
 no_proxy="localhost,127.0.0.1,$maas_system_ip,$(echo $maas_ip_range.{100..200} | sed 's/ /,/g')"
