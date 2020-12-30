@@ -171,7 +171,7 @@ build_maas() {
         maas ${maas_profile} interface update ${maas_system_id} ${maas_int_id} vlan=${vlan_id}
 
         if [[ $space != "external" ]] ; then
-            maas ${maas_profile} ipranges create type=dynamic start_ip="${maas_subnets[$i]}.101" end_ip="${maas_subnets[$i]}.199"
+            maas ${maas_profile} ipranges create type=dynamic start_ip="${maas_subnets[$i]}.${maas_dhcp_start_postfix}" end_ip="${maas_subnets[$i]}.${maas_dhcp_end_postfix}"
             maas $maas_profile vlan update fabric-0 ${maas_vlans[$i]} dhcp_on=True primary_rack="$maas_system_id"
 
             # Force MAAS to manage all subnets except for external
