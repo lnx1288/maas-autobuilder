@@ -24,7 +24,6 @@ users:
 ## Install additional packages on first boot
 packages:
   - virtinst
-  - bc
   - jq
   - ksmtuned
 

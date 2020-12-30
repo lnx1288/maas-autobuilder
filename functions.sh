@@ -7,7 +7,7 @@ state_timeout=1200
 install_deps()
 {
     # Install some of the dependent packages
-    deps="jq bc"
+    deps="jq"
     if [[ "$0" == "*manage-maas-*" ]] ; then
         deps+=" virtinst"
     fi
@@ -80,7 +80,7 @@ ensure_machine_in_state()
 
     # We will continue to check the state of the machine to see if it is in
     # $state or the timeout has occured, which defaults to 20 mins
-    while [[ ${status_name} != "${state}" ]] && [[ $( echo ${time_end} - ${time_start} | bc ) -le ${timeout} ]]
+    while [[ ${status_name} != "${state}" ]] && [[ $(( ${time_end} - ${time_start} )) -le ${timeout} ]]
     do
         # Check every 20 seconds of the state
         sleep 20
