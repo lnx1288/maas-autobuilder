@@ -143,40 +143,47 @@ deploy_node() {
 show_help() {
   echo "
 
-  -a    Create and Deploy
-  -c    Creates Hypervisor
-  -d    Deploy Hypervisor
-  -k    Add Hypervisor as Pod
-  -n    Assign Networks
-  -p    Update Partitioning
-  -w    Removes Hypervisor
+  -a <node>   Create and Deploy
+  -c <node>   Creates Hypervisor
+  -d <node>   Deploy Hypervisor
+  -k <node>   Add Hypervisor as Pod
+  -n <node>   Assign Networks
+  -p <node>   Update Partitioning
+  -w <node>   Removes Hypervisor
   "
 }
 
-read_config
+read_configs
 
-while getopts ":cwdaknp" opt; do
+while getopts ":c:w:d:a:k:n:p:" opt; do
   case $opt in
     c)
+        read_config "configs/$OPTARG.config"
         create_node
         ;;
     w)
+        read_config "configs/$OPTARG.config"
         wipe_node
         ;;
     d)
+        read_config "configs/$OPTARG.config"
         install_node
         ;;
     a)
+        read_config "configs/$OPTARG.config"
         create_node
         install_node
         ;;
     k)
+        read_config "configs/$OPTARG.config"
         add_pod
         ;;
     n)
+        read_config "configs/$OPTARG.config"
         network_auto
         ;;
     p)
+        read_config "configs/$OPTARG.config"
         create_partitions
         ;;
     \?)
@@ -184,5 +191,10 @@ while getopts ":cwdaknp" opt; do
         show_help
         exit 1
         ;;
+    : )
+        printf "Option -%s needs an argument.\n" "$OPTARG" >&2
+        show_help
+        echo ""
+        exit 1
   esac
 done

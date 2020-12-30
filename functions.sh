@@ -136,20 +136,29 @@ maas_add_node()
     [[ $machine_type == "physical" ]] && maas_create_partitions ${system_id}
 }
 
-read_config()
+read_configs()
 {
     configs=""
     configs+=" configs/default.config"
     configs+=" configs/maas.config"
-    configs+=" configs/hypervisor.config"
+    if [[ "$0" == "*manage-maas-*" ]] ; then
+        configs+=" configs/hypervisor.config"
+    fi
 
     for config in $configs ; do
-        if [ ! -f $config ]; then
-            printf "Error: missing config file. Please create the file '$config'.\n"
-            exit 1
-        else
-            shopt -s extglob
-            source "$config"
-        fi
+        read_config $config
     done
+}
+
+read_config()
+{
+    config=$1
+
+    if [ ! -f $config ]; then
+        printf "Error: missing config file. Please create the file '$config'.\n"
+        exit 1
+    else
+        shopt -s extglob
+        source "$config"
+    fi
 }

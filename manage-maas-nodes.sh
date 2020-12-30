@@ -417,7 +417,7 @@ show_help() {
 }
 
 # Initialise the configs
-read_config
+read_configs
 
 while getopts ":cwjdnr" opt; do
   case $opt in

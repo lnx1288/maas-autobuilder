@@ -1,7 +1,7 @@
 # Todo
 
-1. add the hypervisor as a flag rather then the configuration file when adding
-   hypervisors.
+1. ~~add the hypervisor as a flag rather then the configuration file when adding
+   hypervisors.~~
 1. ~~Add script to cloud-init, that will allow to wipe disk. This will allow to
    reboot the hypervisor, such that we don't have to log back in after the
    machine has been re-commissioned.~~
