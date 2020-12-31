@@ -121,6 +121,9 @@ maas_add_node()
         power_params=""
     fi
 
+    # TODO: check to see if the machine already exists, then we can skip the
+    # creation below
+
     # This command creates the machine in MAAS. This will then automatically
     # turn the machines on, and start commissioning.
     maas ${maas_profile} machines create \

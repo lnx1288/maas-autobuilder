@@ -128,13 +128,14 @@ build_maas() {
     maas $maas_profile maas set-config name=default_storage_layout value=lvm
     maas $maas_profile maas set-config name=network_discovery value=disabled
     maas $maas_profile maas set-config name=active_discovery_interval value=0
-    #maas $maas_profile maas set-config name=kernel_opts value="console=ttyS0,115200 console=tty0,115200 elevator=noop zswap.enabled=1 zswap.compressor=lz4 zswap.max_pool_percent=20 zswap.zpool=z3fold intel_iommu=on iommu=pt debug nosplash scsi_mod.use_blk_mq=1 dm_mod.use_blk_mq=1 enable_mtrr_cleanup mtrr_spare_reg_nr=1 systemd.log_level=debug"
-    #maas $maas_profile maas set-config name=maas_name value=us-east
-    maas $maas_profile maas set-config name=upstream_dns value="$maas_upstream_dns"
     maas $maas_profile maas set-config name=dnssec_validation value=no
     maas $maas_profile maas set-config name=enable_analytics value=false
     maas $maas_profile maas set-config name=enable_third_party_drivers value=false
     maas $maas_profile maas set-config name=curtin_verbose value=true
+
+    [[ -n "$maas_upstream_dns" ]] && maas $maas_profile maas set-config name=upstream_dns value="${maas_upstream_dns}"
+    [[ -n "$maas_kernel_opts" ]] && maas $maas_profile maas set-config name=kernel_opts value="${maas_kernel_opts}"
+    [[ -n "$maas_name" ]] && maas $maas_profile maas set-config name=maas_name value=${maas_name}
 
     if [[ -n "$squid_proxy" ]] ; then
         maas $maas_profile maas set-config name=enable_http_proxy value=true
@@ -150,10 +151,11 @@ build_maas() {
     # The release that is is downloading by default
     default_release=$(maas $maas_profile boot-source-selection read 1 1 | jq .release | sed s/\"//g)
 
-    # Add bionic if the default is focal
-    if [[ $default_release == "focal" ]] ; then
-        maas ${maas_profile} boot-source-selections update 1 os="ubuntu" release="bionic" arches="amd64" subarches="*" labels="*"
-    fi
+    # Add bionic if the default is focal, or vice-versa
+    [[ $default_release == "focal" ]] && other_release="bionic"
+    [[ $default_release == "bionic" ]] && other_release="focal"
+
+    [[ -n "$other_release" ]] && maas ${maas_profile} boot-source-selections update 1 os="ubuntu" release="${other_release}" arches="amd64" subarches="*" labels="*"
 
     # Import the base images; this can take some time
     echo "Importing boot images, please be patient, this may take some time..."
