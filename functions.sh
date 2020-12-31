@@ -50,7 +50,15 @@ machine_add_tag()
 
     # If the tag doesn't exist, then create it
     if [[ $(maas ${maas_profile} tag read ${tag}) == "Not Found" ]] ; then
-        tag_create=$(maas ${maas_profile} tags create name=${tag})
+        case $tag in:
+            "pod-console-logging")
+                kernel_opts="console=tty1 console=ttyS0"
+                ;;
+            *)
+                kernel_opts=""
+                ;;
+        esac
+        tag_create=$(maas ${maas_profile} tags create name=${tag} kernel_opts=${kernel_opts})
     fi
 
     # Assign the tag to the machine
