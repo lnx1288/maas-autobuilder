@@ -139,13 +139,17 @@ maas_add_node()
 
         maas_assign_networks ${system_id}
     else
-        boot_int=$(maas ${maas_profile} machine read ${system_id} | jq ".boot_interface | {mac:.mac_address, int_d:.id}")
+        boot_int=$(maas ${maas_profile} machine read ${system_id} | jq ".boot_interface | {mac:.mac_address, int_id:.id}")
 
         if [[ $mac_addr != "$(echo $boot_int | jq .mac | sed s/\"//g)" ]] ; then
-            maas $maas_profile interface update $(echo $boot_int | jq .int_id | sed s/\"//g) mac_addr=${mac_addr}
+            # A quick hack so that we can change the mac address of the interface.
+            # The machine needs to be broken, ready or allocated.
+            hack_commission=$(maas $maas_profile machine commission ${system_id})
+            hack_break=$(maas $maas_profile machine mark-broken ${system_id})
+            int_update=$(maas $maas_profile interface update ${system_id} $(echo $boot_int | jq .int_id | sed s/\"//g) mac_address=${mac_addr})
         fi
-        maas ${maas_profile} machine update ${system_id} \
-            power_type=${power_type} ${power_params}
+        machine_power_update=$(maas ${maas_profile} machine update ${system_id} \
+            power_type=${power_type} ${power_params})
         commission_node ${system_id}
     fi
 

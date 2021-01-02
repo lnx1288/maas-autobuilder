@@ -326,7 +326,7 @@ build_vms() {
         virsh define "$virt_node.xml"
 
         # Start the VM
-        virsh start "$virt_node" &
+        #virsh start "$virt_node" &
 
         # Call the maas_add_node function, this will add the node to MAAS
         maas_add_node ${virt_node} ${macaddr[0]} ${node_type} &
