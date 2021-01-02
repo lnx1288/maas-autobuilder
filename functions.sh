@@ -50,7 +50,7 @@ machine_add_tag()
 
     # If the tag doesn't exist, then create it
     if [[ $(maas ${maas_profile} tag read ${tag}) == "Not Found" ]] ; then
-        case $tag in:
+        case $tag in
             "pod-console-logging")
                 kernel_opts="console=tty1 console=ttyS0"
                 ;;
@@ -121,21 +121,31 @@ maas_add_node()
         power_params=""
     fi
 
-    # TODO: check to see if the machine already exists, then we can skip the
-    # creation below
-
-    # This command creates the machine in MAAS. This will then automatically
-    # turn the machines on, and start commissioning.
-    maas ${maas_profile} machines create \
-        hostname=${node_name}            \
-        mac_addresses=${mac_addr}        \
-        architecture=amd64/generic       \
-        power_type=${power_type} ${power_params} > /dev/null
-
-    # Grabs the system_id for th node that we are adding
+    # Check if the system already exists
     system_id=$(maas_system_id ${node_name})
 
-    ensure_machine_in_state ${system_id} "Ready"
+    # This command creates the machine in MAAS, if it doesn't already exist.
+    # This will then automatically turn the machines on, and start
+    # commissioning.
+    if [[ -z "$system_id" ]] ; then
+        machine_create=$(maas ${maas_profile} machines create \
+            hostname=${node_name}            \
+            mac_addresses=${mac_addr}        \
+            architecture=amd64/generic       \
+            power_type=${power_type} ${power_params})
+        system_id=$(echo $machine_create | jq .system_id | sed s/\"//g)
+
+        ensure_machine_in_state ${system_id} "Ready"
+    else
+        boot_int=$(maas ${maas_profile} machine read ${system_id} | jq ".boot_interface | {mac:.mac_address, int_d:.id}")
+
+        if [[ $mac_addr != "$(echo $boot_int | jq .mac | sed s/\"//g)" ]] ; then
+            maas $maas_profile interface update $(echo $boot_int | jq .int_id | sed s/\"//g) mac_addr=${mac_addr}
+        fi
+        maas ${maas_profile} machine update ${system_id} \
+            power_type=${power_type} ${power_params}
+        commission_node ${system_id}
+    fi
 
     machine_add_tag ${system_id} ${node_type}
     [[ $machine_type == "vm" ]] && machine_add_tag ${system_id} "pod-console-logging"
@@ -145,6 +155,18 @@ maas_add_node()
     maas_assign_networks ${system_id}
 
     [[ $machine_type == "physical" ]] && maas_create_partitions ${system_id}
+}
+
+commission_node()
+{
+    system_id=$1
+
+    commission_machine=$(maas ${maas_profile} machine commission ${system_id})
+
+    # Ensure that the machine is in ready state before the next step
+    ensure_machine_in_state ${system_id} "Ready"
+
+    maas_auto_assign_networks ${system_id}
 }
 
 read_configs()

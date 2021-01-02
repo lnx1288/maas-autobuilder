@@ -99,18 +99,6 @@ network_auto()
     wait
 }
 
-commission_vm()
-{
-    system_id=$1
-
-    commission_machine=$(maas ${maas_profile} machine commission ${system_id})
-
-    # Ensure that the machine is in ready state before the next step
-    ensure_machine_in_state ${system_id} "Ready"
-
-    maas_auto_assign_networks ${system_id}
-}
-
 recommission_vms()
 {
     install_deps
@@ -120,7 +108,7 @@ recommission_vms()
         printf -v virt_node %s-%02d "$compute" "$virt"
         system_id=$(maas_system_id ${virt_node})
 
-        commission_vm ${system_id} &
+        commission_node ${system_id} &
 
         sleep ${build_fanout}
     done
