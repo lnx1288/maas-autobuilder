@@ -136,6 +136,8 @@ maas_add_node()
         system_id=$(echo $machine_create | jq .system_id | sed s/\"//g)
 
         ensure_machine_in_state ${system_id} "Ready"
+
+        maas_assign_networks ${system_id}
     else
         boot_int=$(maas ${maas_profile} machine read ${system_id} | jq ".boot_interface | {mac:.mac_address, int_d:.id}")
 
