@@ -150,10 +150,6 @@ maas_add_node()
     machine_add_tag ${system_id} ${node_type}
     [[ $machine_type == "vm" ]] && machine_add_tag ${system_id} "pod-console-logging"
 
-    # Ensure that all the networks on the system have the Auto-Assign set
-    # so that the all the of the networks on the host have an IP automatically.
-    maas_assign_networks ${system_id}
-
     [[ $machine_type == "physical" ]] && maas_create_partitions ${system_id}
 }
 
@@ -166,7 +162,7 @@ commission_node()
     # Ensure that the machine is in ready state before the next step
     ensure_machine_in_state ${system_id} "Ready"
 
-    maas_auto_assign_networks ${system_id}
+    maas_assign_networks ${system_id}
 }
 
 read_configs()
