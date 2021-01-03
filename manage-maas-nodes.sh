@@ -236,6 +236,7 @@ build_vms() {
         # virt-install
         macaddr=()
         network_spec=""
+        extra_args=""
 
         # Based on the type of network we are using we will assign variables
         # such that this can be either bridge or network type
@@ -305,6 +306,21 @@ build_vms() {
             continue
         fi
 
+        # For testing and WIP/POC
+        if [[ ${enable_secureboot} == "true" ]] ; then
+            extra_args+=" --boot loader_secure=yes"
+            #extra_args+=" --boot loader=/usr/share/OVMF/OVMF_CODE.secboot.fd"
+            #extra_args+=" --boot nvram_template=/usr/share/OVMF/OVMF_VARS.fd"
+            #extra_args+=" --boot loader_ro=yes"
+            #extra_args+=" --boot loader_type=pflash"
+            extra_args+=" --machine q35"
+            extra_args+=" --features smm=on"
+            enable_uefi="true"
+        fi
+
+        # Flags required to enable uEFI
+        [[ ${enable_uefi} == "true" ]] && extra_args+=" --boot uefi"
+
         # Creates the VM with all the attributes given
         virt-install -v --noautoconsole   \
             --print-xml                   \
@@ -319,14 +335,11 @@ build_vms() {
             --graphics spice,clipboard_copypaste=no,mouse_mode=client,filetransfer_enable=off \
             --cpu host-passthrough,cache.mode=passthrough  \
             --controller "$stg_bus",model=virtio-scsi,index=0  \
-            $disk_spec \
+            $extra_args $disk_spec \
             $network_spec > "$virt_node.xml" &&
 
         # Create the Vm based on the XML file defined in the above command
         virsh define "$virt_node.xml"
-
-        # Start the VM
-        #virsh start "$virt_node" &
 
         # Call the maas_add_node function, this will add the node to MAAS
         maas_add_node ${virt_node} ${macaddr[0]} ${node_type} &
