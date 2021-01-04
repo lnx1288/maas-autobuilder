@@ -4,7 +4,7 @@ This is a quick-and-dirty set of shell scripts that will build out and
 bootstrap a MAAS environment with all of the bits and pieces you need to get
 it running for any cloud, any workload.
 
-* `manage-maas-nodes.sh.......`: Create kvm instances that MAAS will manage
+* `manage-vm-nodes.sh.........`: Create kvm instances that MAAS will manage
 * `manage-hypervisor-nodes.sh.`: Create hypervisors that MAAS will manage
 * `bootstrap-maas.sh..........`: Build and bootstrap your MAAS environment
 

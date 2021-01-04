@@ -42,8 +42,8 @@ write_files:
       ln -sf ${HOSTNAME}.config hypervisor.config
 
       cd ../
-      chmod +x manage-maas-nodes.sh
-      ./manage-maas-nodes.sh -c
+      chmod +x manage-vm-nodes.sh
+      ./manage-vm-nodes.sh -c
     permissions: '0755'
     owner: root:root
   - path: /root/install_kvm.sh

@@ -8,7 +8,7 @@ install_deps()
 {
     # Install some of the dependent packages
     deps="jq"
-    if [[ "$0" =~ "manage-maas" ]] ; then
+    if [[ "$0" =~ "manage-vm-nodes" ]] ; then
         deps+=" virtinst"
     fi
     sudo apt -y update && sudo apt -y install ${deps}
@@ -176,7 +176,7 @@ read_configs()
     configs=""
     configs+=" configs/default.config"
     configs+=" configs/maas.config"
-    if [[ "$0" =~ "manage-maas" ]] ; then
+    if [[ "$0" =~ "manage-vm-nodes" ]] ; then
         configs+=" configs/hypervisor.config"
     fi
 
