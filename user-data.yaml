@@ -84,6 +84,15 @@ write_files:
       dd if=/dev/zero of=/dev/sda bs=1M count=1000
     permissions: '0755'
     owner: root:root
+  - path: /etc/netplan/99-custom.yaml
+    content: |
+      network:
+        version: 2
+        ethernets:
+          enp1s0:
+             wakeonlan: true
+    permissions: '0644'
+    owner: root:root
 
 # Runs any command that we need to run post install
 runcmd:
@@ -91,3 +100,4 @@ runcmd:
   - [ "rm", "/root/install_kvm.sh" ]
   - [ "/root/initial_setup.sh" ]
   - [ "rm", "/root/initial_setup.sh" ]
+  - [ "netplan", "apply" ]
