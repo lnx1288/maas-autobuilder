@@ -371,7 +371,7 @@ destroy_vms() {
         virsh --connect qemu:///system destroy "$virt_node"
 
         # Actually remove the VM
-        virsh --connect qemu:///system undefine "$virt_node"
+        virsh --connect qemu:///system undefine "$virt_node" --nvram
 
         # Remove the three storage volumes from disk
         if [[ $doing_juju = "true" ]] ; then
