@@ -67,6 +67,18 @@ machine_add_tag()
     tag_update=$(maas ${maas_profile} tag update-nodes ${tag} add=${system_id})
 }
 
+machine_set_zone()
+{
+    system_id=$1
+    zone=$2
+
+    if [[ $(maas ${maas_profile} zone read ${zone}) == "Not Found" ]] ; then
+        zone_create=$(maas ${maas_profile} zones create name=${zone})
+    fi
+
+    zone_set=$(maas ${maas_profile} machine update ${system_id} zone=${zone})
+}
+
 # This takes the system_id, and ensures that the machine is in $state state
 # You may want to tweak the commission_timeout above in somehow it's failing
 # and needs to be done quicker
@@ -156,6 +168,8 @@ maas_add_node()
     fi
 
     machine_add_tag ${system_id} ${node_type}
+    machine_set_zone ${system_id} ${hypervisor_name}
+
     [[ $machine_type == "vm" ]] && machine_add_tag ${system_id} "pod-console-logging"
 
     [[ $machine_type == "physical" ]] && maas_create_partitions ${system_id}

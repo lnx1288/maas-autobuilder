@@ -85,32 +85,26 @@ wipe_vms() {
 }
 
 # Fixes all the networks on all the VMs
-network_auto()
+do_nodes()
 {
     install_deps
     maas_login
+
+    function=$1
 
     for ((virt="$node_start"; virt<=node_count; virt++)); do
         printf -v virt_node %s-%02d "$compute" "$virt"
         system_id=$(maas_system_id ${virt_node})
 
-        maas_auto_assign_networks ${system_id} &
-    done
-    wait
-}
+        if [[ $function == "network" ]] ; then
+            maas_auto_assign_networks ${system_id} &
+        elif [[ $function == "zone" ]] ; then
+            machine_set_zone ${system_id} ${hypervisor_name} &
+        elif [[ $function == "comission" ]] ; then
+            commission_node ${system_id} &
 
-recommission_vms()
-{
-    install_deps
-    maas_login
-
-    for ((virt="$node_start"; virt<=node_count; virt++)); do
-        printf -v virt_node %s-%02d "$compute" "$virt"
-        system_id=$(maas_system_id ${virt_node})
-
-        commission_node ${system_id} &
-
-        sleep ${build_fanout}
+            sleep ${build_fanout}
+        fi
     done
     wait
 }
@@ -413,7 +407,7 @@ show_help() {
 # Initialise the configs
 read_configs
 
-while getopts ":cwjdnr" opt; do
+while getopts ":cwjdnrjz" opt; do
   case $opt in
     c)
         create_vms
@@ -427,13 +421,16 @@ while getopts ":cwjdnr" opt; do
         wipe_disks
         ;;
     n)
-        network_auto
+        do_nodes network
         ;;
     r)
-        recommission_vms
+        do_nodes commission
         ;;
     j)
         create_juju
+        ;;
+    z)
+        do_nodes zone
         ;;
     \?)
         printf "Unrecognized option: -%s. Valid options are:" "$OPTARG" >&2
