@@ -309,10 +309,10 @@ build_vms() {
         # For testing and WIP/POC
         if [[ ${enable_secureboot} == "true" ]] ; then
             extra_args+=" --boot loader_secure=yes"
-            #extra_args+=" --boot loader=/usr/share/OVMF/OVMF_CODE.secboot.fd"
-            #extra_args+=" --boot nvram_template=/usr/share/OVMF/OVMF_VARS.fd"
-            #extra_args+=" --boot loader_ro=yes"
-            #extra_args+=" --boot loader_type=pflash"
+            #extra_args+=",loader=/usr/share/OVMF/OVMF_CODE.secboot.fd"
+            #extra_args+=",nvram_template=/usr/share/OVMF/OVMF_VARS.fd"
+            #extra_args+=",loader_ro=yes"
+            #extra_args+=",loader_type=pflash"
             extra_args+=" --machine q35"
             extra_args+=" --features smm=on"
             enable_uefi="true"
@@ -422,6 +422,8 @@ while getopts ":cwjdnr" opt; do
         wipe_vms
         ;;
     d)
+        install_deps
+        maas_login
         wipe_disks
         ;;
     n)

@@ -48,6 +48,8 @@ machine_add_tag()
     system_id=$1
     tag=$2
 
+    [[ -n "$enable_tagging" ]] && [[ $enable_tagging == "false" ]] && return
+
     # If the tag doesn't exist, then create it
     if [[ $(maas ${maas_profile} tag read ${tag}) == "Not Found" ]] ; then
         case $tag in
