@@ -92,18 +92,35 @@ do_nodes()
 
     function=$1
 
+    juju_total=1
+
     for ((virt="$node_start"; virt<=node_count; virt++)); do
-        printf -v virt_node %s-%02d "$compute" "$virt"
+        node_type="compute"
+        if [[ $virt -le $control_count ]] ; then
+            node_type="control"
+        fi
+        if [[ $juju_total -le $juju_count ]] ; then
+            printf -v virt_node %s-%02d "$hypervisor_name-juju" "$juju_total"
+
+            doing_juju="true"
+	    node_type="juju"
+            (( virt-- ))
+            (( juju_total++ ))
+	else
+            printf -v virt_node %s-%02d "$compute" "$virt"
+	fi
         system_id=$(maas_system_id ${virt_node})
+
 
         if [[ $function == "network" ]] ; then
             maas_auto_assign_networks ${system_id} &
         elif [[ $function == "zone" ]] ; then
             machine_set_zone ${system_id} ${hypervisor_name} &
-        elif [[ $function == "comission" ]] ; then
+        elif [[ $function == "commission" ]] ; then
             commission_node ${system_id} &
-
             sleep ${build_fanout}
+	elif [[ $function == "tag" ]] ; then
+            machine_add_tag ${system_id} ${node_type}
         fi
     done
     wait
@@ -400,6 +417,7 @@ show_help() {
   -d    Releases VMs, Clears Disk
   -n    Updates all the networks on all VMs
   -r    Recommission all VMs
+  -t    Re-tag all VMS
   -j    Only create juju VM
   "
 }
@@ -407,7 +425,7 @@ show_help() {
 # Initialise the configs
 read_configs
 
-while getopts ":cwjdnrjz" opt; do
+while getopts ":cwjdnrtz" opt; do
   case $opt in
     c)
         create_vms
@@ -425,6 +443,9 @@ while getopts ":cwjdnrjz" opt; do
         ;;
     r)
         do_nodes commission
+        ;;
+    t)
+        do_nodes tag
         ;;
     j)
         create_juju
