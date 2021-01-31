@@ -65,7 +65,7 @@ remove_maas_snap() {
 
 install_maas_deb() {
 
-    #sudo apt-add-repository ppa:maas/${maas_version} -y
+    sudo apt-add-repository ppa:maas/${maas_version} -y
 
     # This is separate from the removal, so we can handle them atomically
     sudo apt-get -fuy --reinstall install "${core_packages}" "${maas_packages[@]}" "${pg_packages[@]}"
@@ -159,7 +159,7 @@ build_maas() {
     [[ $default_release == "focal" ]] && other_release="bionic"
     [[ $default_release == "bionic" ]] && other_release="focal"
 
-    [[ -n "$other_release" ]] && maas ${maas_profile} boot-source-selections update 1 os="ubuntu" release="${other_release}" arches="amd64" subarches="*" labels="*"
+    [[ -n "$other_release" ]] && maas ${maas_profile} boot-source-selections create 1 os="ubuntu" release="${other_release}" arches="amd64" subarches="*" labels="*"
 
     # Import the base images; this can take some time
     echo "Importing boot images, please be patient, this may take some time..."
