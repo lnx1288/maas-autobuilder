@@ -38,7 +38,7 @@ init_variables() {
 
     core_packages=( jq moreutils uuid )
     maas_packages=( maas maas-cli maas-proxy maas-dhcp maas-dns maas-rack-controller maas-region-api maas-common )
-    pg_packages=( postgresql-10 postgresql-client postgresql-client-common postgresql-common )
+    pg_packages=( postgresql postgresql-client postgresql-client-common postgresql-common )
 
     maas_snaps=( maas maas-test-db )
 }
@@ -56,6 +56,7 @@ remove_maas_deb() {
     for package in "${maas_packages[@]}" "${pg_packages[@]}"; do
        sudo dpkg -P "$package"
     done
+    sudo apt-add-repository ppa:maas/${maas_version} -y -r
 }
 
 remove_maas_snap() {
@@ -63,6 +64,9 @@ remove_maas_snap() {
 }
 
 install_maas_deb() {
+
+    #sudo apt-add-repository ppa:maas/${maas_version} -y
+
     # This is separate from the removal, so we can handle them atomically
     sudo apt-get -fuy --reinstall install "${core_packages}" "${maas_packages[@]}" "${pg_packages[@]}"
     sudo sed -i 's/DISPLAY_LIMIT=5/DISPLAY_LIMIT=100/' /usr/share/maas/web/static/js/bundle/maas-min.js
