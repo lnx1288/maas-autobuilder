@@ -7,6 +7,8 @@ it running for any cloud, any workload.
 * `manage-maas-nodes.sh.......`: Create kvm instances that MAAS will manage
 * `manage-hypervisor-nodes.sh.`: Create hypervisors that MAAS will manage
 * `bootstrap-maas.sh..........`: Build and bootstrap your MAAS environment
+* `functions.sh...............`: Common function that the first 2 scripts use
+* `user-data.yaml`............`: cloud-init for hypervisor nodes
 
 There are plenty of options to customize its behavior, as well as drop in to
 any step of the process without rebuilding the full MAAS from scratch.
@@ -18,7 +20,7 @@ has **not** been tested on CentOS or Debian, but should work minimally on
 those environments, if you choose to make that your host.  Patches are
 welcome, of course.
 
-## Components
+## Components - bootstrap-maas.sh
 
 ```
   -a <cloud_name>    Do EVERYTHING (maas, juju cloud, juju bootstrap)
@@ -31,21 +33,40 @@ welcome, of course.
   -t <cloud_name>    Tear down the cloud named <cloud_name>
 ```
 
-## Installing and testing MAAS 
+## Components - manage-hypervisor-nodes.sh
+
+```
+  -a <node>   Create and Deploy
+  -c <node>   Creates Hypervisor
+  -d <node>   Deploy Hypervisor
+  -k <node>   Add Hypervisor as Pod
+  -n <node>   Assign Networks
+  -p <node>   Update Partitioning
+  -w <node>   Removes Hypervisor
+```
+
+## Components - manage-maas-nodes.sh
+
+```
+  -c    Creates everything
+  -w    Removes everything
+  -d    Releases VMs, Clears Disk
+  -n    Updates all the networks on all VMs
+  -r    Recommission all VMs
+  -j    Only create juju VM
+  -z    Adds the machines to their respective zones
+```
+
+## Misc - functions.sh
+
+## Misc - user-data.yaml
+
+## Installing and testing MAAS
 
 Just run `./bootstrap-maas.sh` with the appropriate option above.
 Minimally, you'll want to use `./bootstrap-maas.sh -b` or `-i` to install
 just the components needed.
 
 I've done all the work needed to make this as idempotent as possible.  It
-will need some minor tweaks to get working with MAAS 2.4.x, becauase of the
+will need some minor tweaks to get working with MAAS 2.4.x, because of the
 newer PostgreSQL dependencies.
-
-MAAS from snap is also not supported (yet) again for the same SQL
-dependencies which are included inside the MAAS snap.
-
-## TODO and What's Next
-
-* Support for using MAAS from snap vs.  main or PPA.  With snap, postgresql
-  and other deps are installed in the snap, so handling has to change
-
