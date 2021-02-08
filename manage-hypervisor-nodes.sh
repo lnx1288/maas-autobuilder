@@ -13,14 +13,14 @@ maas_assign_networks()
     system_id=$1
 
     # Get the details of the physical interface
-    phsy_int=$(maas ${maas_profile} interfaces read ${system_id} | jq ".[] | {id:.id, name:.name,parent:.parents}" --compact-output | grep "parent.*\[\]")
+    phsy_int=$(maas ${maas_profile} interfaces read ${system_id} | jq -c ".[] | {id:.id, name:.name,parent:.parents}" | grep "parent.*\[\]")
     phys_int_name=$(echo $phsy_int | jq .name | sed s/\"//g)
     phys_int_id=$(echo $phsy_int | jq .id | sed s/\"//g)
 
     i=0
     for vlan in ${vlans[*]}
     do
-        subnet_line=$(maas admin subnets read | jq ".[] | {subnet_id:.id, vlan:.vlan.vid, vlan_id:.vlan.id}" --compact-output | grep "vlan\":$vlan," | head -n 1)
+        subnet_line=$(maas admin subnets read | jq -rc --arg vlan "$vlan" ".[] | select(.vlan.vid == $vlan) | select(.name | contains(\"/24\"))| {subnet_id:.id, vlan_id:.vlan.id}")
         maas_vlan_id=$(echo $subnet_line | jq .vlan_id | sed s/\"//g)
         maas_subnet_id=$(echo $subnet_line | jq .subnet_id | sed s/\"//g)
         ip_addr=""
