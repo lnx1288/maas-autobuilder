@@ -322,7 +322,7 @@ fi
     echo "Details for cloud.......: $cloud_name..."
     juju clouds --local --format json | jq --arg cloud "$cloud_name" '.[$cloud]'
 
-    juju bootstrap "$cloud_name" --debug --config=config-"$rand_uuid".yaml
+    juju bootstrap "$cloud_name" --debug --config=config-"$rand_uuid".yaml --constraints "tags=juju"
 
     # Since we created ephemeral files, let's wipe them out. Comment if you want to keep them around
     if [[ $? = 0 ]]; then
@@ -330,7 +330,7 @@ fi
     fi
 
     # Only enable HA if the variable is set and true
-    [[ -n "$juju_ha" ]] && [[ $juju_ha == "true" ]] && juju enable-ha
+    [[ -n "$juju_ha" ]] && [[ $juju_ha == "true" ]] && juju enable-ha --constraints "tags=juju"
 
     juju machines -m controller
 }

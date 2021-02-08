@@ -31,8 +31,12 @@ maas_assign_networks()
             mode="STATIC"
             ip_addr="ip_address=$hypervisor_ip"
         else
-            vlan_int=$(maas ${maas_profile} interfaces create-vlan ${system_id} vlan=${maas_vlan_id} parent=$phys_int_id)
-            vlan_int_id=$(echo $vlan_int | jq .id | sed s/\"//g)
+            # Check to see if the vlan interface already exists, otherwise create it
+            vlan_int_id=$(maas ${maas_profile} interfaces read ${system_id} | jq --argjson vlan ${vlan} '.[] | select(.vlan.vid == $vlan) | select(.type == "vlan") | .id')
+            if [[ -z "$vlan_int_id" ]] ; then
+                vlan_int=$(maas ${maas_profile} interfaces create-vlan ${system_id} vlan=${maas_vlan_id} parent=$phys_int_id)
+                vlan_int_id=$(echo $vlan_int | jq .id | sed s/\"//g)
+            fi
             if [[ $vlan -eq $external_vlan ]] ; then
                 # Set the external IP to be static as per the configuration
                 mode="STATIC"
@@ -42,9 +46,16 @@ maas_assign_networks()
                 mode="AUTO"
             fi
         fi
-        bridge_int=$(maas ${maas_profile} interfaces create-bridge ${system_id} name=${bridges[$i]} vlan=$maas_vlan_id mac_address=${hypervisor_mac} parent=$vlan_int_id)
+        # Check to see if the bridge interface already exists, otherwise create it
+        bridge_int=$(maas ${maas_profile} interfaces read ${system_id} | jq --argjson vlan ${vlan} '.[] | select(.vlan.vid == $vlan) | select(.type == "bridge")')
+        [[ -z "${bridge_int}" ]] && bridge_int=$(maas ${maas_profile} interfaces create-bridge ${system_id} name=${bridges[$i]} vlan=$maas_vlan_id mac_address=${hypervisor_mac} parent=$vlan_int_id)
         bridge_int_id=$(echo $bridge_int | jq .id | sed s/\"//g)
+        cur_mode=$(echo $bridge_int | jq ".links[].mode" | sed s/\"//g)
+        # If the mode is already set correctly, then move on
+        [[ $cur_mode == "auto" ]] && [[ $mode == "AUTO" ]] && continue
+        #bridge_unlink=$(maas ${maas_profile} interface unlink-subnet $system_id $bridge_int_id id=$( echo $bridge_int_id | jq {maas_subnet_id})
         bridge_link=$(maas ${maas_profile} interface link-subnet $system_id $bridge_int_id mode=${mode} subnet=${maas_subnet_id} ${ip_addr})
+        echo $bridge_link
         (( i++ ))
     done
 }
