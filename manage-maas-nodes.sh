@@ -61,6 +61,66 @@ maas_auto_assign_networks()
     done
 }
 
+maas_create_partitions()
+{
+    system_id=$1
+
+    vg_name="vg0"
+
+    declare -A parts
+    parts=(
+        ["tmp"]="/tmp"
+        ["var-tmp"]="/var/tmp"
+        ["root"]="/"
+    )
+
+    declare -A part_size
+    part_size=(
+        ["tmp"]=2
+        ["var-tmp"]=2
+        ["root"]="remaining"
+    )
+
+    # Wipe everything first
+    storage_layout=$(maas ${maas_profile} machine set-storage-layout ${system_id} storage_layout=blank)
+
+    # Grab the first disk, typically /dev/sda
+    blk_device=$(maas ${maas_profile} block-devices read ${system_id} | jq ".[] | select(.name == \"sda\")")
+    blk_device_id=$(echo $blk_device | jq .id)
+
+    # create /boot/efi partition, just in-case we are using a uEFI based VM
+    boot_size=512
+    size=$(( ${boot_size} * 1024 * 1024 ))
+
+    boot_part=$(maas ${maas_profile} partitions create ${system_id} ${blk_device_id} size=$size)
+    boot_part_id=$(echo $boot_part | jq .id)
+
+    boot_format=$(maas ${maas_profile} partition format ${system_id} ${blk_device_id} ${boot_part_id} fstype=fat32)
+    boot_mount=$(maas ${maas_profile} partition mount ${system_id} ${blk_device_id} ${boot_part_id} mount_point=/boot/efi)
+
+    # Create the volume group for the rest of the partitions
+    vg_part=$(maas ${maas_profile} partitions create ${system_id} ${blk_device_id})
+    vg_part_id=$(echo $vg_part | jq .id)
+
+    vg_create=$(maas ${maas_profile} volume-groups create ${system_id} name=${vg_name} partitions=${vg_part_id})
+    vg_id=$(echo $vg_create | jq .id)
+
+    for part in ${!parts[@]}; do
+
+        if [[ ${part_size[$part]} == "remaining" ]] ; then
+            size=$(maas ${maas_profile} volume-group read ${system_id} ${vg_id} | jq ".available_size" | sed s/\"//g)
+        else
+            size=$(( ${part_size[$part]} * 1024 * 1024 * 1024 ))
+        fi
+
+        lv_create=$(maas ${maas_profile} volume-group create-logical-volume ${system_id} ${vg_id} name=${part} size=${size})
+        lv_block_id=$(echo ${lv_create} | jq .id)
+
+        stg_fs=$(maas ${maas_profile} block-device format ${system_id} ${lv_block_id} fstype=ext4)
+        stg_mount=$(maas ${maas_profile} block-device mount ${system_id} ${lv_block_id} mount_point=${parts[$part]})
+    done
+}
+
 # Calls the 3 functions that creates the VMs
 create_vms() {
     install_deps
@@ -103,12 +163,12 @@ do_nodes()
             printf -v virt_node %s-%02d "$hypervisor_name-juju" "$juju_total"
 
             doing_juju="true"
-	    node_type="juju"
+            node_type="juju"
             (( virt-- ))
             (( juju_total++ ))
-	else
+        else
             printf -v virt_node %s-%02d "$compute" "$virt"
-	fi
+        fi
         system_id=$(maas_system_id ${virt_node})
 
 
@@ -119,7 +179,9 @@ do_nodes()
         elif [[ $function == "commission" ]] ; then
             commission_node ${system_id} &
             sleep ${build_fanout}
-	elif [[ $function == "tag" ]] ; then
+        elif [[ $function == "partition" ]] ; then
+            maas_create_partitions ${system_id}
+        elif [[ $function == "tag" ]] ; then
             machine_add_tag ${system_id} ${node_type}
         fi
     done
@@ -413,33 +475,38 @@ show_help() {
   echo "
 
   -c    Creates everything
-  -w    Removes everything
   -d    Releases VMs, Clears Disk
+  -j    Only create juju VM
   -n    Updates all the networks on all VMs
+  -p    Update the partitioning of the nodes
   -r    Recommission all VMs
   -t    Re-tag all VMS
-  -j    Only create juju VM
+  -w    Removes everything
+  -z    Add nodes to availability zones
   "
 }
 
 # Initialise the configs
 read_configs
 
-while getopts ":cwjdnrtz" opt; do
+while getopts ":cdjnprtwz" opt; do
   case $opt in
     c)
         create_vms
-        ;;
-    w)
-        wipe_vms
         ;;
     d)
         install_deps
         maas_login
         wipe_disks
         ;;
+    j)
+        create_juju
+        ;;
     n)
         do_nodes network
+        ;;
+    p)
+        do_nodes partition
         ;;
     r)
         do_nodes commission
@@ -447,8 +514,8 @@ while getopts ":cwjdnrtz" opt; do
     t)
         do_nodes tag
         ;;
-    j)
-        create_juju
+    w)
+        wipe_vms
         ;;
     z)
         do_nodes zone

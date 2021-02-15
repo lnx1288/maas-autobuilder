@@ -172,7 +172,31 @@ maas_add_node()
 
     [[ $machine_type == "vm" ]] && machine_add_tag ${system_id} "pod-console-logging"
 
-    [[ $machine_type == "physical" ]] && maas_create_partitions ${system_id}
+    maas_create_partitions ${system_id}
+}
+
+add_dns_record()
+{
+    record=$1
+    domain=$2
+    ip_addr=$3
+
+    domain_entry=$(add_domain $domain)
+    domain_id=$(echo $domain_entry | jq .id)
+
+    maas admin dnsresources read | jq -rc --arg record "landscape-internal" '.[] | select(.fqdn | contains($record)) |{fqdn:.fqdn,ip:.ip_addresses[].ip}'
+
+}
+
+add_domain()
+{
+    domain=$1
+
+    domain_entry=$(maas ${maas_profile} domains read | jq -rc --arg domainname "${domain}" '.[] | select(.name == $domainname)')
+
+    [[ -z $domain_exists ]] && domain_entry=$(maas ${maas_profile} domains create name="${domain}" authoritative=true)
+
+    echo $domain_entry
 }
 
 commission_node()
