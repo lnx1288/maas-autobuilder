@@ -171,6 +171,18 @@ do_nodes()
         fi
         system_id=$(maas_system_id ${virt_node})
 
+        status_name=$(maas ${maas_profile} machine read ${system_id} | jq ".status_name" | sed s/\"//g)
+
+        if [[ ${status_name} == "Deployed" ]] ; then
+            case $function in
+                "network"|"commission"|"partition")
+                    echo "Skipping ${virt_node} ..."
+                    continue
+                    ;;
+            esac
+        fi
+
+        echo "Setting up $function for $virt_node ..."
 
         if [[ $function == "network" ]] ; then
             maas_auto_assign_networks ${system_id} &
@@ -180,7 +192,8 @@ do_nodes()
             commission_node ${system_id} &
             sleep ${build_fanout}
         elif [[ $function == "partition" ]] ; then
-            maas_create_partitions ${system_id}
+            [[ $node_type == "juju" ]] && continue
+            maas_create_partitions ${system_id} &
         elif [[ $function == "tag" ]] ; then
             machine_add_tag ${system_id} ${node_type}
         fi
