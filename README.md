@@ -59,7 +59,13 @@ welcome, of course.
 
 ## Misc - functions.sh
 
+Many functions that are common between the 2 scripts above
+
 ## Misc - user-data.yaml
+
+`cloud-init` file, that helps with deployment of the hypervisors. This helps
+to automate the deployment of the hypervisor, which in turns grabs this repo
+and deploys all the VMs required.
 
 ## Installing and testing MAAS
 
