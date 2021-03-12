@@ -8,7 +8,7 @@ it running for any cloud, any workload.
 * `manage-hypervisor-nodes.sh.`: Create hypervisors that MAAS will manage
 * `bootstrap-maas.sh..........`: Build and bootstrap your MAAS environment
 * `functions.sh...............`: Common function that the first 2 scripts use
-* `user-data.yaml`............`: cloud-init for hypervisor nodes
+* `user-data.yaml.............`: cloud-init for hypervisor nodes
 
 There are plenty of options to customize its behavior, as well as drop in to
 any step of the process without rebuilding the full MAAS from scratch.

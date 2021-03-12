@@ -365,16 +365,18 @@ build_vms() {
             ram="$node_ram"
             vcpus="$node_cpus"
             node_type="compute"
+            disk_count=${#disks[@]}
             if [[ $virt -le $control_count ]] ; then
                 ram="$control_ram"
                 vcpus="$control_cpus"
                 node_type="control"
+                disk_count=1
             fi
 
             # Based on the disks array, it will create a definition to add these
             # disks to the VM
             disk_spec=""
-            for ((disk=0;disk<${#disks[@]};disk++)); do
+            for ((disk=0;disk<${disk_count};disk++)); do
                 disk_spec+=" --disk path=$storage_path/$virt_node/$virt_node-d$((${disk} + 1)).img"
                 disk_spec+=",format=$storage_format,size=${disks[$disk]},bus=$stg_bus,io=native,cache=directsync"
             done
