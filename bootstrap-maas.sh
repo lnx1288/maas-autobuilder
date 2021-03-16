@@ -1,5 +1,8 @@
 #!/bin/bash 
 
+# set -x
+. functions.sh
+
 required_bins=( ip sudo debconf-set-selections )
 
 check_bins() {
@@ -241,6 +244,36 @@ bootstrap_maas() {
     # maas "$maas_profile" machine deploy $maas_node
 }
 
+add_dns_records()
+{
+    i=0
+    for dns_name in ${maas_dns_names[*]} ; do
+
+        add_records=""
+        dns_name_result=$(maas ${maas_profile} dnsresources read name=${dns_name}-internal)
+
+        if [[ -n $(echo $dns_name_result | jq .[]) ]] ; then
+
+            dns_id=$(echo $dns_name_result | jq .[].id)
+            dns_ip=$(maas ${maas_profile} dnsresource update ${dns_id} fqdn=${dns_name}-internal.example.com ip_addresses=10.0.1.${maas_dns_ips[$i]})
+        else
+            dns_ip=$(maas ${maas_profile} dnsresources create fqdn=${dns_name}-internal.example.com ip_addresses=10.0.1.${maas_dns_ips[$i]})
+        fi
+
+        dns_cname_result=$(maas ${maas_profile} dnsresource-records read rrtype=CNAME name=${dns_name})
+
+        if [[ -n $(echo $dns_cname_result | jq .[]) ]] ; then
+
+            dns_id=$(echo $dns_cname_result | jq .[].id)
+            dns_cname=$(maas ${maas_profile} dnsresource-record update ${dns_id} rrtype=cname rrdata=${dns_name}-internal.example.com)
+        else
+            dns_cname=$(maas ${maas_profile} dnsresource-records create fqdn=${dns_name}.example.com rrtype=cname rrdata=${dns_name}-internal.example.com)
+        fi
+
+        (( i++ ))
+    done
+}
+
 # These are for juju, adding a cloud matching the customer/reproducer we need
 add_cloud() {
 
@@ -348,6 +381,7 @@ show_help() {
 
   -a <cloud_name>    Do EVERYTHING (maas, juju cloud, juju bootstrap)
   -b                 Build out and bootstrap a new MAAS
+  -d                 Add DNS records for VIPs
   -c <cloud_name>    Add a new cloud + credentials
   -i                 Just install the dependencies and exit
   -j <name>          Bootstrap the Juju controller called <name>
@@ -371,7 +405,7 @@ init_variables
 # This is the proxy that MAAS itself uses (the "internal" MAAS proxy)
 no_proxy="localhost,127.0.0.1,$maas_system_ip,$(echo $maas_ip_range.{100..200} | sed 's/ /,/g')"
 
-while getopts ":a:bc:ij:nt:r" opt; do
+while getopts ":a:bc:dij:nt:r" opt; do
   case $opt in
     a )
         check_bins
@@ -393,6 +427,10 @@ while getopts ":a:bc:ij:nt:r" opt; do
         check_bins maas
         init_variables
         add_cloud "$OPTARG"
+        ;;
+    d )
+        maas_login
+        add_dns_records
         ;;
     i )
         echo "Installing MAAS and PostgreSQL dependencies"
