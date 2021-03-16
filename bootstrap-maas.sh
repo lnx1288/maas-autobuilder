@@ -255,9 +255,9 @@ add_dns_records()
         if [[ -n $(echo $dns_name_result | jq .[]) ]] ; then
 
             dns_id=$(echo $dns_name_result | jq .[].id)
-            dns_ip=$(maas ${maas_profile} dnsresource update ${dns_id} fqdn=${dns_name}-internal.example.com ip_addresses=10.0.1.${maas_dns_ips[$i]})
+            dns_ip=$(maas ${maas_profile} dnsresource update ${dns_id} fqdn=${dns_name}-internal.example.com ip_addresses=${maas_ip_range}.${maas_dns_ips[$i]})
         else
-            dns_ip=$(maas ${maas_profile} dnsresources create fqdn=${dns_name}-internal.example.com ip_addresses=10.0.1.${maas_dns_ips[$i]})
+            dns_ip=$(maas ${maas_profile} dnsresources create fqdn=${dns_name}-internal.example.com ip_addresses=${maas_ip_range}.${maas_dns_ips[$i]})
         fi
 
         dns_cname_result=$(maas ${maas_profile} dnsresource-records read rrtype=CNAME name=${dns_name})
