@@ -265,9 +265,9 @@ add_dns_records()
         if [[ -n $(echo $dns_cname_result | jq .[]) ]] ; then
 
             dns_id=$(echo $dns_cname_result | jq .[].id)
-            dns_cname=$(maas ${maas_profile} dnsresource-record update ${dns_id} rrtype=cname rrdata=${dns_name}-internal.example.com)
+            dns_cname=$(maas ${maas_profile} dnsresource-record update ${dns_id} rrtype=cname rrdata=${dns_name}-internal.example.com.)
         else
-            dns_cname=$(maas ${maas_profile} dnsresource-records create fqdn=${dns_name}.example.com rrtype=cname rrdata=${dns_name}-internal.example.com)
+            dns_cname=$(maas ${maas_profile} dnsresource-records create fqdn=${dns_name}.example.com rrtype=cname rrdata=${dns_name}-internal.example.com.)
         fi
 
         (( i++ ))
