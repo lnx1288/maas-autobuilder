@@ -91,6 +91,8 @@ write_files:
         ethernets:
           enp1s0:
              wakeonlan: true
+          enp2s0:
+             wakeonlan: true
     permissions: '0644'
     owner: root:root
 
