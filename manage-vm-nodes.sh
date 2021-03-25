@@ -293,13 +293,18 @@ machine_exists()
     virsh_machine=$(virsh list --all --name | grep ${node_name})
 
     if [[ $virsh_machine != "" ]] ; then
-        macaddr=$(virsh domiflist ${node_name} | grep br0 | awk '{print $5}')
+        macaddr=$(virsh domiflist ${node_name} | tail +3 | head -n 1 | awk '{print $5}')
 
         echo $macaddr
     else
         echo "false"
     fi
 
+}
+
+get_mac()
+{
+    machine_exists $*
 }
 
 # Builds the VMs from scratch, and then adds them to MAAS
@@ -320,7 +325,6 @@ build_vms() {
         # Based on the bridges array, it will generate these amount of MAC
         # addresses and then create the network definitions to add to
         # virt-install
-        macaddr=()
         network_spec=""
         extra_args=""
 
@@ -335,9 +339,8 @@ build_vms() {
         fi
 
         # Now define the network definition
-        for ((mac=0;mac<${#net_type[@]};mac++)); do
-            macaddr+=($(printf '52:54:00:%02x:%02x:%02x\n' "$((RANDOM%256))" "$((RANDOM%256))" "$((RANDOM%256))"))
-            network_spec+=" --network=$net_prefix="${net_type[$mac]}",mac="${macaddr[$mac]}",model=$nic_model"
+        for ((net=0;net<${#net_type[@]};net++)); do
+            network_spec+=" --network=$net_prefix="${net_type[$net]}",model=$nic_model"
         done
 
         if [[ $juju_total -le $juju_count ]] ; then
@@ -347,7 +350,7 @@ build_vms() {
             vcpus="$juju_cpus"
             node_type="juju"
 
-            network_spec="--network=$net_prefix="${net_type[0]}",mac="${macaddr[0]}",model=$nic_model"
+            network_spec="--network=$net_prefix="${net_type[0]}",model=$nic_model"
 
             disk_spec="--disk path=$storage_path/$virt_node/$virt_node.img"
             disk_spec+=",format=$storage_format,size=${juju_disk},bus=$stg_bus,io=native,cache=directsync"
@@ -429,8 +432,10 @@ build_vms() {
         # Create the Vm based on the XML file defined in the above command
         virsh define "$virt_node.xml"
 
+        macaddr=$(get_mac ${virt_node})
+
         # Call the maas_add_node function, this will add the node to MAAS
-        maas_add_node ${virt_node} ${macaddr[0]} ${node_type} &
+        maas_add_node ${virt_node} ${macaddr} ${node_type} &
 
         # Wait some time before building the next, this helps with a lot of DHCP requests
         # and ensures that all VMs are commissioned and deployed.
