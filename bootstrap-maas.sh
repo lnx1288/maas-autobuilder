@@ -63,7 +63,7 @@ remove_maas_deb() {
 }
 
 remove_maas_snap() {
-    sudo snap remove ${maas_snaps[@]}
+    sudo snap remove --purge ${maas_snaps[@]}
 }
 
 install_maas_deb() {
