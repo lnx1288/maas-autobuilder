@@ -196,6 +196,8 @@ do_nodes()
             maas_create_partitions ${system_id} &
         elif [[ $function == "tag" ]] ; then
             machine_add_tag ${system_id} ${node_type}
+            machine_add_tag ${system_id} ${hypervisor_name}
+            machine_add_tag ${system_id} ${hypervisor_tag}
         fi
     done
     wait
