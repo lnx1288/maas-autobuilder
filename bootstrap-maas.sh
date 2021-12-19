@@ -292,7 +292,6 @@ clouds:
     type: maas
     auth-types: [ oauth1 ]
     description: MAAS cloud for $cloud_name
-    # endpoint: ${maas_endpoint:0:-8}
     endpoint: $maas_endpoint
     config:
       enable-os-refresh-update: true

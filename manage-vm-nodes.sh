@@ -422,7 +422,7 @@ build_vms() {
             --video qxl,vram=256          \
             --channel spicevmc            \
             --name "$virt_node"           \
-            --ram "$ram"                  \
+            --ram "memory=$(( $ram * 6 / 4 )),currentMemory=$ram" \
             --vcpus "$vcpus"              \
             --console pty,target_type=serial \
             --graphics spice,clipboard_copypaste=no,mouse_mode=client,filetransfer_enable=off \
