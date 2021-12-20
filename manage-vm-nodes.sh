@@ -515,6 +515,7 @@ while getopts ":cdjnprtwz" opt; do
   case $opt in
     c)
         create_vms
+        do_nodes tag
         ;;
     d)
         install_deps

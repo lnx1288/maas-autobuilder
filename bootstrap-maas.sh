@@ -327,7 +327,7 @@ EOF
 cat > config-"$rand_uuid".yaml <<EOF
 automatically-retry-hooks: true
 mongo-memory-profile: default
-default-series: bionic
+default-series: $juju_bootstrap_series
 transmit-vendor-metrics: false
 EOF
 
@@ -354,7 +354,10 @@ fi
     echo "Details for cloud.......: $cloud_name..."
     juju clouds --local --format json | jq --arg cloud "$cloud_name" '.[$cloud]'
 
-    juju bootstrap "$cloud_name" --debug --config=config-"$rand_uuid".yaml --constraints "tags=juju"
+    juju bootstrap "$cloud_name" --debug --config=config-"$rand_uuid".yaml \
+        --model-default image-metadata-url=http://192.168.1.12/lxd/ \
+        --model-default agent-metadata-url=http://192.168.1.12/juju/tools/ \
+        --constraints "tags=juju"
 
     # Since we created ephemeral files, let's wipe them out. Comment if you want to keep them around
     if [[ $? = 0 ]]; then

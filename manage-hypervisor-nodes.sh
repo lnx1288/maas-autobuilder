@@ -20,9 +20,10 @@ maas_assign_networks()
     i=0
     for vlan in ${vlans[*]}
     do
-        subnet_line=$(maas admin subnets read | jq -rc --arg vlan "$vlan" ".[] | select(.vlan.vid == $vlan) | select(.name | contains(\"/24\"))| {subnet_id:.id, vlan_id:.vlan.id}")
+        subnet_line=$(maas admin subnets read | jq -rc --arg vlan "$vlan" ".[] | select(.vlan.vid == $vlan) | select(.name | contains(\"/24\"))| {subnet_id:.id, vlan_id:.vlan.id, cidr: .cidr}")
         maas_vlan_id=$(echo $subnet_line | jq .vlan_id | sed s/\"//g)
         maas_subnet_id=$(echo $subnet_line | jq .subnet_id | sed s/\"//g)
+        sub_prefix=$(echo $subnet_line | jq .cidr | sed s/\"//g | sed 's/0\/24//g' )
         ip_addr=""
         if [[ $i -eq 0 ]] ; then
             # Set the first interface to be static as per the configuration so that it
@@ -43,7 +44,8 @@ maas_assign_networks()
                 ip_addr="ip_address=$external_ip"
             else
                 # Set everything else to be auto assigned
-                mode="AUTO"
+                mode="STATIC"
+                ip_addr="ip_address=${sub_prefix}${ip_suffix}"
             fi
         fi
         # Check to see if the bridge interface already exists, otherwise create it
