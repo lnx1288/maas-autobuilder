@@ -64,11 +64,17 @@ maas_create_partitions()
 {
     system_id=$1
 
+    disks=$(maas ${maas_profile} block-devices read ${system_id})
+
     size=20
 
     actual_size=$(( $size * 1024 * 1024 * 1024 ))
 
-    storage_layout=$(maas ${maas_profile} machine set-storage-layout ${system_id} storage_layout=lvm vg_name=${hypervisor_name} lv_name=root lv_size=${actual_size})
+    boot_disk=$(echo $disks | jq ".[] | select(.name == \"${disk_names[0]}\") | .id")
+
+    set_boot_disk=$(maas ${maas_profile} block-device set-boot-disk ${system_id} ${boot_disk})
+
+    storage_layout=$(maas ${maas_profile} machine set-storage-layout ${system_id} storage_layout=lvm vg_name=${hypervisor_name} lv_name=root lv_size=${actual_size} root_disk=${boot_disk})
 
     vg_device=$(echo $storage_layout | jq ".volume_groups[].id" )
     remaining_space=$(maas ${maas_profile} volume-group read ${system_id} ${vg_device} | jq ".available_size" | sed s/\"//g)
@@ -77,7 +83,34 @@ maas_create_partitions()
     libvirt_block_id=$(echo ${libvirt_lv} | jq .id)
 
     stg_fs=$(maas ${maas_profile} block-device format ${system_id} ${libvirt_block_id} fstype=ext4)
-    stg_mount=$(maas ${maas_profile} block-device mount ${system_id} ${libvirt_block_id} mount_point=${storage_path})
+
+    stg_mount=$(maas ${maas_profile} block-device mount ${system_id} ${libvirt_block_id} mount_point=${ceph_storage_path})
+
+    for ((disk=1;disk<${#disk_names[@]};disk++)); do
+
+        disk_id=$(echo $disks | jq ".[] | select(.name == \"${disk_names[$disk]}\") | .id")
+
+        create_partition=$(maas ${maas_profile} partitions create ${system_id} ${disk_id})
+
+        part_id=$(echo $create_partition | jq .id)
+
+        if [[ $disk -eq 1 ]] ; then
+            vg_create=$(maas ${maas_profile} volume-groups create ${system_id} name=${hypervisor_name}-nvme block_device=${disk_id} partitions=${part_id})
+
+            vg_id=$(echo $vg_create | jq .id)
+            vg_size=$(echo $vg_create | jq .size)
+        else
+
+            vg_update=$(maas ${maas_profile} volume-group update ${system_id} ${vg_id} add_partitions=${part_id})
+            vg_size=$(echo $vg_update | jq .size)
+        fi
+
+    done
+
+    lv_create=$(maas admin volume-group create-logical-volume ${system_id} ${vg_id} name=images size=${vg_size})
+    lv_id=$(echo $lv_create | jq .id)
+    lv_fs=$(maas ${maas_profile} block-device format ${system_id} ${lv_id} fstype=ext4)
+    lv_mount=$(maas ${maas_profile} block-device mount ${system_id} ${lv_id} mount_point=${storage_path})
 }
 
 maas_add_pod()

@@ -95,6 +95,9 @@ write_files:
           enp2s0:
              wakeonlan: true
              link-local: []
+          enp3s0:
+             wakeonlan: true
+             link-local: []
     permissions: '0644'
     owner: root:root
 
