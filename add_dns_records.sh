@@ -2,6 +2,18 @@
 
 . functions.sh
 
+setup_domain()
+{
+    domains=$(maas ${maas_profile} domains read)
+
+    my_domain=$(echo $domains | jq '.[] | select(.name=="example.com")')
+
+    if [[ -z $my_domain ]] ; then
+
+        maas ${maas_profile} domains create name="example.com"
+    fi
+}
+
 get_ip_from_juju()
 {
     from_app=""
@@ -63,6 +75,8 @@ add_record()
 
 read_configs
 maas_login
+
+setup_domain
 
 for app in ${maas_dns_names[*]} landscape graylog nagios ; do
     add_record ${app}
