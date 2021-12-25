@@ -218,15 +218,23 @@ create_storage() {
     for ((virt="$node_start"; virt<=node_count; virt++)); do
         printf -v virt_node %s-%02d "$compute" "$virt"
 
-        # Create th directory where the storage files will be located
+        # Create the directory where the storage files will be located
         mkdir -p "$storage_path/$virt_node"
+        mkdir -p "$ceph_storage_path/$virt_node"
 
         # For all the disks that are defined in the array, create a disk
         for ((disk=0;disk<${#disks[@]};disk++)); do
-            file_name="$storage_path/$virt_node/$virt_node-d$((${disk} + 1)).img"
+
+            if [[ $disk -eq 0 ]] ; then
+               final_storage_path=$storage_path
+            else
+               final_storage_path=$ceph_storage_path
+            fi
+
+            file_name="$final_storage_path/$virt_node/$virt_node-d$((${disk} + 1)).img"
 
             if [[ ! -f $file_name ]] ; then
-                /usr/bin/qemu-img create -f "$storage_format" "${file_name}" "${disks[$disk]}"G &
+                /usr/bin/qemu-img create -f "$final_storage_format" "${file_name}" "${disks[$disk]}"G &
             fi
         done
     done
@@ -277,9 +285,11 @@ wipe_disks() {
         # Remove the disks
         if [[ $doing_juju == "true" ]] ; then
             rm -rf "$storage_path/$virt_node/$virt_node.img"
+            rm -rf "$ceph_storage_path/$virt_node/$virt_node.img"
         else
             for ((disk=0;disk<${#disks[@]};disk++)); do
                 rm -rf "$storage_path/$virt_node/$virt_node-d$((${disk} + 1)).img" &
+                rm -rf "$ceph_storage_path/$virt_node/$virt_node-d$((${disk} + 1)).img" &
             done
         fi
     done
