@@ -234,7 +234,7 @@ create_storage() {
             file_name="$final_storage_path/$virt_node/$virt_node-d$((${disk} + 1)).img"
 
             if [[ ! -f $file_name ]] ; then
-                /usr/bin/qemu-img create -f "$final_storage_format" "${file_name}" "${disks[$disk]}"G &
+                /usr/bin/qemu-img create -f "$storage_format" "${file_name}" "${disks[$disk]}"G &
             fi
         done
     done
@@ -392,7 +392,12 @@ build_vms() {
             # disks to the VM
             disk_spec=""
             for ((disk=0;disk<${disk_count};disk++)); do
-                disk_spec+=" --disk path=$storage_path/$virt_node/$virt_node-d$((${disk} + 1)).img"
+                if [[ $disk -eq 0 ]] ; then
+                    final_storage_path=$storage_path
+                else
+                    final_storage_path=$ceph_storage_path
+                fi
+                disk_spec+=" --disk path=$final_storage_path/$virt_node/$virt_node-d$((${disk} + 1)).img"
                 disk_spec+=",format=$storage_format,size=${disks[$disk]},bus=$stg_bus,io=native,cache=directsync"
             done
         fi
