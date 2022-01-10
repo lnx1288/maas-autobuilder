@@ -223,6 +223,13 @@ read_configs()
     for config in $configs ; do
         read_config $config
     done
+
+    # Dynamically generate the node count
+    # The amount of memory add on 10% then divide by node_ram then add 1
+    # For a 32GB machine we'll get 10 VMs altogether
+    # 1 x 4GB juju, 1 x 8GB controler, 8 x 4GB compute
+    # The juju VM is not included in the count
+    node_count=$(( (( `cat /proc/meminfo | grep -i memtotal | awk '{print $2}'` - ( ${control_count} * ${control_ram} * 1024 )) * 11 / 10) / 1024 / ${node_ram} + (7*7/10) ))
 }
 
 read_config()
