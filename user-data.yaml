@@ -1,7 +1,7 @@
 #cloud-config
 
 ssh_import_id:
-  - lp:arif-ali
+  - lp:al3jandrosg
 
 byobu_by_default: enable
 
@@ -37,7 +37,7 @@ write_files:
     content: |
       #!/bin/bash
 
-      git clone https://github.com/arif-ali/maas-autobuilder.git /root/maas-autobuilder
+      git clone https://github.com/lnx1288/maas-autobuilder.git /root/maas-autobuilder
       cd /root/maas-autobuilder/configs
       ln -sf ${HOSTNAME}.config hypervisor.config
 

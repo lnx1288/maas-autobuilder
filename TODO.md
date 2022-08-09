@@ -11,4 +11,6 @@
    1. ~~Snap implementation~~
    1. ~~Adding VLANs and subnets~~
    1. ~~Adding spaces~~
+* bootstrap-maas.sh cannot be executed by root or it will fail, solve it
+* if snapd is not installed bootstrap-maas.sh fails, solve that 
 

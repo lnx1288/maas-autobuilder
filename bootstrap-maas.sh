@@ -3,7 +3,9 @@
 # set -x
 . functions.sh
 
+# vars
 required_bins=( ip sudo debconf-set-selections )
+maas_config="configs/maas.config"
 
 check_bins() {
     # Append any needed binaries we need to check for, to our list
@@ -25,7 +27,6 @@ read_config() {
         exit 1
     else
         shopt -s extglob
-        maas_config="configs/maas.config"
         source "$maas_config"
     fi
     if [[ $maas_pkg_type != "snap" ]]  && [ ! -f maas.debconf ]; then
@@ -37,7 +38,7 @@ read_config() {
 # Initialize some vars we'll reuse later in the build, bootstrap
 init_variables() {
     echo "MAAS Endpoint: $maas_endpoint"
-    echo "MAAS Proxy: $maas_local_proxy"
+    #echo "MAAS Proxy: $maas_local_proxy"
 
     core_packages=( jq moreutils uuid )
     maas_packages=( maas maas-cli maas-proxy maas-dhcp maas-dns maas-rack-controller maas-region-api maas-common )
