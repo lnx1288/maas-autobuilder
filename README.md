@@ -15,10 +15,10 @@ any step of the process without rebuilding the full MAAS from scratch.
 
 ## Requirements
 
-Requires, minimally, `bash`, `jq` and a working Ubuntu environment.  This
-has **not** been tested on CentOS or Debian, but should work minimally on
-those environments, if you choose to make that your host.  Patches are
-welcome, of course.
+Requires, minimally, `bash`, `jq` and a working Ubuntu environment (see 
+below for a custom example setup). This has **not** been tested on CentOS 
+or Debian, but should work minimally on those environments, if you choose 
+to make that your host.  Patches are welcome, of course.
 
 ## Components - bootstrap-maas.sh
 
@@ -76,3 +76,25 @@ just the components needed.
 I've done all the work needed to make this as idempotent as possible.  It
 will need some minor tweaks to get working with MAAS 2.4.x, because of the
 newer PostgreSQL dependencies.
+
+## Example setup
+
+```
+host------------------
+                      \
+                       home router
+                      / 
+maas VM --- laptop ---
+
+```
+
+Qemu/KVM instance using a custom bridge network to ensure that the DHCP
+requests from the host to be managed by MaaS can be captured by the VM.
+
+### Bridge network setup
+
+https://levelup.gitconnected.com/how-to-setup-bridge-networking-with-kvm-on-ubuntu-20-04-9c560b3e3991
+
+### Other helpful resources:
+
+https://www.cyberciti.biz/faq/how-to-reset-forgotten-root-password-for-linux-kvm-qcow2-image-vm/

@@ -38,7 +38,7 @@ read_config() {
 # Initialize some vars we'll reuse later in the build, bootstrap
 init_variables() {
     echo "MAAS Endpoint: $maas_endpoint"
-    #echo "MAAS Proxy: $maas_local_proxy"
+    echo "MAAS Proxy: $maas_local_proxy"
 
     core_packages=( jq moreutils uuid )
     maas_packages=( maas maas-cli maas-proxy maas-dhcp maas-dns maas-rack-controller maas-region-api maas-common )
@@ -105,7 +105,7 @@ build_maas() {
 
     [[ $maas_pkg_type == "snap" ]] && maas init region+rack --database-uri maas-test-db:/// --maas-url $maas_endpoint --force
 
-    sudo maas createadmin --username "$maas_profile" --password "$maas_pass" --email "$maas_profile"@"$maas_pass" --ssh-import lp:"$launchpad_user"
+    sudo maas createadmin --username "$maas_profile" --password "$maas_pass" --email "$maas_profile"@somedomain --ssh-import lp:"$launchpad_user"
 
     if [[ $maas_pkg_type == "deb" ]] ; then
       sudo chsh -s /bin/bash maas
@@ -119,7 +119,7 @@ build_maas() {
     maas_cmd="maas-region"
     [[ $maas_pkg_type == "snap" ]] && maas_cmd="maas"
 
-    maas_api_key="$(sudo ${maas_cmd} apikey --username $maas_profile | head -n 1 | tee ~/.maas-api.key)"
+    maas_api_key="$(sudo $maas_cmd apikey --username $maas_profile | head -n 1 | tee ~/.maas-api.key)"
 
     # Fetch the MAAS API key, store to a file for later reuse, also set this var to that value
     maas login "$maas_profile" "$maas_endpoint" "$maas_api_key"
@@ -178,7 +178,7 @@ build_maas() {
 
     i=0
     for space in ${maas_spaces[*]} ; do
-        fabric_id=$(maas admin fabrics read | jq ".[] | {id:.id, vlan:.vlans[].vid, fabric:.name}" --compact-output | grep fabric-0 | jq ".id")
+        fabric_id=$(maas ${maas_profile} fabrics read | jq ".[] | {id:.id, vlan:.vlans[].vid, fabric:.name}" --compact-output | grep fabric-0 | jq ".id")
         space_object=$(maas ${maas_profile} spaces create name=${space})
         echo $space_object | jq .
         space_id=$(echo $space_object | jq ".id")
@@ -225,14 +225,14 @@ bootstrap_maas() {
     until [ "$(maas $maas_profile boot-resources is-importing)" = false ]; do sleep 3; done;
 
     # Add a chassis with nodes we want to build against
-    [[ -n "$virsh_chassis" ]] && maas $maas_profile machines add-chassis chassis_type=virsh prefix_filter=maas-node hostname="$virsh_chassis"
+    #[[ -n "$virsh_chassis" ]] && maas $maas_profile machines add-chassis chassis_type=virsh prefix_filter=maas-node hostname="$virsh_chassis"
 
     # This is necessary to allow MAAS to quiesce the imported chassis
-    echo "Pausing while chassis is imported..."
-    sleep 10
+    #echo "Pausing while chassis is imported..."
+    #sleep 10
 
     # Commission those nodes (requires that image import step has completed)
-    maas $maas_profile machines accept-all
+    #maas $maas_profile machines accept-all
 
     # Grab the first node in the chassis and commission it
     # maas_node=$(maas $maas_profile machines read | jq -r '.[0].system_id')
@@ -279,7 +279,7 @@ add_dns_records()
 add_cloud() {
 
     if ! [ -x "$(command -v juju)" ]; then
-        sudo snap install juju --channel "$juju_version"
+        sudo snap install juju --channel "$juju_version" --classic
     fi
     rand_uuid=$(uuid -F siv)
     cloud_name="$1"
@@ -356,8 +356,6 @@ fi
     juju clouds --local --format json | jq --arg cloud "$cloud_name" '.[$cloud]'
 
     juju bootstrap "$cloud_name" --debug --config=config-"$rand_uuid".yaml \
-        --model-default image-metadata-url=http://192.168.1.12/lxd/ \
-        --model-default agent-metadata-url=http://192.168.1.12/juju/tools/ \
         --constraints "tags=juju"
 
     # Since we created ephemeral files, let's wipe them out. Comment if you want to keep them around
@@ -406,7 +404,7 @@ read_config
 init_variables
 
 # This is the proxy that MAAS itself uses (the "internal" MAAS proxy)
-no_proxy="localhost,127.0.0.1,$maas_system_ip,$(echo $maas_ip_range.{100..200} | sed 's/ /,/g')"
+no_proxy="localhost,127.0.0.1,$maas_system_ip,$(echo $maas_ip_range.{101..199} | sed 's/ /,/g')"
 
 while getopts ":a:bc:dij:nt:r" opt; do
   case $opt in
